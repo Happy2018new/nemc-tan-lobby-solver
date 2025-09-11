@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/raknet"
+	"github.com/OmineDev/flowers-for-machines/core/minecraft/raknet"
 )
 
 func main() {

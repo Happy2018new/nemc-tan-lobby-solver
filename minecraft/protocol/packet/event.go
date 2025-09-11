@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // Event is sent by the server to send an event with additional data. It is typically sent to the client for

@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/google/uuid"

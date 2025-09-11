@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // Transfer is sent by the server to transfer a player from the current server to another. Doing so will

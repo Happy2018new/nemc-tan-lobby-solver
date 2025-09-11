@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // PlayerHotBar is sent by the server to the client. It used to be used to link hot bar slots of the player to

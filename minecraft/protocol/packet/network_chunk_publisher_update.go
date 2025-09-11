@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // NetworkChunkPublisherUpdate is sent by the server to change the point around which chunks are and remain

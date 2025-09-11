@@ -1,8 +1,9 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
 	"io"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // Packet represents a packet that may be sent over a Minecraft network connection. The packet needs to hold

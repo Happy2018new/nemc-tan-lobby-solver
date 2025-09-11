@@ -1,11 +1,12 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/internal"
 	"bytes"
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/internal"
 
 	"github.com/golang/snappy"
 	"github.com/klauspost/compress/flate"

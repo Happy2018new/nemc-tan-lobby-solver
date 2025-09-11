@@ -1,6 +1,6 @@
 package packet
 
-import "Eulogist/core/minecraft/standard/protocol"
+import "github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 
 // EducationResourceURI is a packet that transmits education resource settings to all clients.
 type EducationResourceURI struct {

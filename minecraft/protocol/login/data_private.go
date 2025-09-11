@@ -3,7 +3,6 @@
 package login
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 
 	"github.com/google/uuid"
 	"golang.org/x/text/language"

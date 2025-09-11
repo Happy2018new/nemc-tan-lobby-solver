@@ -1,7 +1,7 @@
 package protocol
 
 import (
-	"Eulogist/core/minecraft/standard/nbt"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/nbt"
 )
 
 // ItemInstance represents a unique instance of an item stack. These instances carry a specific network ID

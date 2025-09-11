@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"Eulogist/core/minecraft/standard/nbt"
 	"bytes"
 	"errors"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"io"
 	"math"
 	"unsafe"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/nbt"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/google/uuid"

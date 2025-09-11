@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // ChunkRadiusUpdated is sent by the server in response to a RequestChunkRadius packet. It defines the chunk

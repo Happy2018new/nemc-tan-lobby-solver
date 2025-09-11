@@ -1,12 +1,13 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"fmt"
 	"io"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // Decoder handles the decoding of Minecraft packets sent through an io.Reader. These packets in turn contain

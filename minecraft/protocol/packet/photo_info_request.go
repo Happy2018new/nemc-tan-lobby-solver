@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // PhotoInfoRequest is sent by the client to request photo information from the server. This packet was deprecated in 1.19.80.

@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // OpenSign is sent by the server to open a sign for editing. As of 1.19.80, the player can interact with a sign to edit

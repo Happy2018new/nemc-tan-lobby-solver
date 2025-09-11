@@ -1,6 +1,6 @@
 package packet
 
-import "Eulogist/core/minecraft/standard/protocol"
+import "github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 
 // CreatePhoto is a packet that allows players to export photos from their portfolios into items in their inventory.
 // This packet only works on the Education Edition version of Minecraft.

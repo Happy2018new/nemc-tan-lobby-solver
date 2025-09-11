@@ -1,6 +1,6 @@
 package protocol
 
-import "Eulogist/core/minecraft/standard/nbt"
+import "github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/nbt"
 
 // BlockEntry is an entry for a custom block found in the StartGame packet. The runtime ID of these custom
 // block entries is based on the index they have in the block palette when the palette is ordered

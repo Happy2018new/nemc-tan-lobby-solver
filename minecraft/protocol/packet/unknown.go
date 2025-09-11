@@ -1,8 +1,9 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/protocol"
 	"fmt"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // Unknown is an implementation of the Packet interface for unknown/unimplemented packets. It holds the packet

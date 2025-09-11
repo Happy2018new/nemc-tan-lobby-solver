@@ -1,6 +1,6 @@
 package packet
 
-import "Eulogist/core/minecraft/standard/protocol"
+import "github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 
 // TickingAreasLoadStatus is sent by the server to the client to notify the client of a ticking area's loading status.
 type TickingAreasLoadStatus struct {

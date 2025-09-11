@@ -1,8 +1,8 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/nbt"
-	"Eulogist/core/minecraft/standard/protocol"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/nbt"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 )
 
 // SyncActorProperty is an alternative to synced actor data.

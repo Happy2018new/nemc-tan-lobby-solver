@@ -1,6 +1,6 @@
 package packet
 
-import "Eulogist/core/minecraft/standard/protocol"
+import "github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 
 // ServerStats is a packet sent from the server to the client to update the client on server statistics. It is purely
 // used for telemetry.

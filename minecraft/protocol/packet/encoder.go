@@ -1,12 +1,13 @@
 package packet
 
 import (
-	"Eulogist/core/minecraft/standard/internal"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"fmt"
 	"io"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/internal"
 )
 
 // Encoder handles the encoding of Minecraft packets that are sent to an io.Writer. The packets are compressed

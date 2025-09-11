@@ -1,0 +1,4 @@
+github.com/df-mc/atomic v1.10.0 h1:0ZuxBKwR/hxcFGorKiHIp+hY7hgY+XBTzhCYD2NqSEg=
+github.com/df-mc/atomic v1.10.0/go.mod h1:Gw9rf+rPIbydMjA329Jn4yjd/O2c/qusw3iNp4tFGSc=
+github.com/sandertv/go-raknet v1.14.2 h1:UZLyHn5yQU2Dq2GVq/LlxwAUikaq4q4AA1rl/Pf3AXQ=
+github.com/sandertv/go-raknet v1.14.2/go.mod h1:/yysjwfCXm2+2OY8mBazLzcxJ3irnylKCyG3FLgUPVU=

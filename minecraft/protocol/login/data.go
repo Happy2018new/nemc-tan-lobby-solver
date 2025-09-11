@@ -1,5 +1,3 @@
-//go:build release
-
 package login
 
 import (
@@ -11,8 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/netease/protocol"
-
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/protocol"
 	"github.com/google/uuid"
 	"golang.org/x/text/language"
 )

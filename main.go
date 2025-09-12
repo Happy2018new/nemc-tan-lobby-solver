@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/login"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/packet"
 	"github.com/OmineDev/flowers-for-machines/core/minecraft/raknet"
 )
@@ -24,11 +26,20 @@ func (s *SingleReader) ReadPacket() ([]byte, error) {
 }
 
 func main() {
-	// c, _, err := websocket.Dial(context.Background(), "ws://45.253.177.113:8899", nil)
-	// fmt.Println(c, err)
-	// return
+	cli, err := auth.CreateClient(&auth.ClientOptions{
+		AuthServer: "http://127.0.0.1:8080",
+	})
+	if err != nil {
+		panic(err)
+	}
 
-	str := `fee301000084467b523ecb37541914a5329658ff5c1ef4b231a0c0b69cc1af272befbcbf9df8bb511a0c4861707079323031386e6577`
+	wrapper := auth.NewAccessWrapper(cli, "649145", "", "...")
+	// resp, err := wrapper.RaknetServerList()
+	// fmt.Printf("%#v, %v\n", resp, err)
+	fmt.Println(login.Dial(wrapper))
+	return
+
+	str := `fee301000084467b5293e06c151956a4decdd8b3fc5f51e9511be51cceada7a6d355877b47dc7d92100c4861707079323031386e6577`
 	bs, err := hex.DecodeString(str)
 	if err != nil {
 		panic(err)
@@ -52,7 +63,7 @@ func main() {
 	loginRequest.Marshal(r)
 	fmt.Printf("%#v\n", loginRequest)
 
-	userToken := "ULF8vgZfZSM5C4wH"
+	userToken := "gnEI3C0IIcGnuInu"
 	encryptedUserToken := MD5Sum([]byte(userToken))
 	encryptKeyBytes := []byte(string(encryptedUserToken) + string(loginRequest.Rand))
 	decryptKeyBytes := []byte(string(loginRequest.Rand) + string(encryptedUserToken))
@@ -83,7 +94,7 @@ func main() {
 	// pk.Marshal(r)
 	// return
 
-	conn, err := raknet.Dial("117.147.202.226:10000")
+	conn, err := raknet.Dial("117.147.202.212:10000")
 	if err != nil {
 		panic(err)
 	}
@@ -101,7 +112,7 @@ func main() {
 
 	dec.EnableEncryption(encryptKeyBytes, decryptKeyBytes)
 	// dec.EnableEncryption(decryptKeyBytes, decryptKeyBytes)
-	bs, err = hex.DecodeString(`fee301018b89338d3ac3867e0f896d6fe89c4523f545fccff1399f506c35101bb7ec483d40f2b43eede63051ac0902d23fd726be8c38aea3a932`)
+	bs, err = hex.DecodeString(`fee30173f6c8738e06732ca6a001c204f5293707d5aa2f78b340b6b36ae717119d0f53c5a12327b60e9db09d3852a684eab48737d32e90130e87`)
 	conn.Write(bs)
 	{
 		ddddd, err := packet.NewDecoder(NewSingleReader(bs))

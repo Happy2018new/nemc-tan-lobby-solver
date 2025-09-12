@@ -147,7 +147,9 @@ func FuncIOSliceUint32Length[T any, S ~*[]T](r IO, x S, f func(IO, *T)) {
 
 // SliceOfLen reads/writes the elements of a slice of type T with length l.
 func SliceOfLen[T any, S ~*[]T, A PtrMarshaler[T]](r IO, l uint32, x S) {
-	*x = make([]T, l)
+	if _, ok := r.(*Reader); ok {
+		*x = make([]T, l)
+	}
 	for i := range l {
 		A(&(*x)[i]).Marshal(r)
 	}
@@ -155,7 +157,9 @@ func SliceOfLen[T any, S ~*[]T, A PtrMarshaler[T]](r IO, l uint32, x S) {
 
 // FuncSliceOfLen reads/writes the elements of a slice of type T with length l using func f.
 func FuncSliceOfLen[T any, S ~*[]T](r IO, l uint32, x S, f func(*T)) {
-	*x = make([]T, l)
+	if _, ok := r.(*Reader); ok {
+		*x = make([]T, l)
+	}
 	for i := range l {
 		f(&(*x)[i])
 	}

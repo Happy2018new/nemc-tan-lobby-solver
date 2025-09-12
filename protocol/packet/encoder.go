@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 )
@@ -31,15 +32,24 @@ func (encoder *Encoder) EnableEncryption(encryptKeyBytes []byte, decryptKeyBytes
 // Encode encodes the packets passed. It writes all of them as a single packet which is  compressed and
 // optionally encrypted.
 func (encoder *Encoder) Encode(packetData []byte) error {
-	prepend := append([]byte{}, header...)
-	data := append(prepend, packetData...)
+	// prepend
+	buf := bytes.NewBuffer(nil)
+	buf.Write(header)
+
+	// message
 	if encoder.encrypt != nil {
 		// If the encryption session is not nil, encryption is enabled, meaning we should encrypt the
 		// compressed data of this packet.
-		data = encoder.encrypt.encrypt(data)
+		buf.Write(encoder.encrypt.encrypt(packetData))
+	} else {
+		buf.Write(packetData)
 	}
-	if _, err := encoder.w.Write(data); err != nil {
+
+	// write data to connection
+	if _, err := encoder.w.Write(buf.Bytes()); err != nil {
 		return fmt.Errorf("write batch: %w", err)
 	}
+
+	// return
 	return nil
 }

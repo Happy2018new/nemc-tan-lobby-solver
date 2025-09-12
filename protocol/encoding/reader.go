@@ -164,6 +164,17 @@ func (r *Reader) RGBA(x *color.RGBA) {
 	}
 }
 
+// RoomTips reads a room tips x from underlying reader.
+func (r *Reader) RoomTips(x *RoomTips) {
+	var unusedLength uint16
+	r.Uint16(&unusedLength)
+	r.StringUTF(&x.LevelID)
+	r.Uint8(&x.GameType)
+	r.StringUTF(&x.ConstantTestString)
+	r.Int16(&x.Vioce)
+	r.Uint8(&x.ProtocolID)
+}
+
 // Bytes reads the leftover bytes into a byte slice.
 func (r *Reader) Bytes(p *[]byte) {
 	var err error

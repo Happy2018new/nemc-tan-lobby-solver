@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"bytes"
 	"fmt"
 	"image/color"
 	"io"
@@ -49,15 +50,15 @@ func (w *Writer) String(x *string) {
 
 // Uint8String writes a string, prefixed with a uint8 prefix to the underlying buffer.
 func (w *Writer) Uint8String(x *string) {
-	l := uint16(len(*x))
-	w.Uint16(&l)
+	l := uint8(len(*x))
+	w.Uint8(&l)
 	_, _ = w.Writer().Write([]byte(*x))
 }
 
 // StringUTF writes a string, prefixed with uint16 prefix to the underlying buffer.
 func (w *Writer) StringUTF(x *string) {
-	l := uint8(len(*x))
-	w.Uint8(&l)
+	l := uint16(len(*x))
+	w.Uint16(&l)
 	_, _ = w.Writer().Write([]byte(*x))
 }
 
@@ -118,6 +119,24 @@ func (w *Writer) RGB(x *color.RGBA) {
 func (w *Writer) RGBA(x *color.RGBA) {
 	val := uint32(x.A)<<24 | uint32(x.R)<<16 | uint32(x.G)<<8 | uint32(x.B)
 	w.Uint32(&val)
+}
+
+// RoomTips writes a room tips x to the underlying buffer.
+func (w *Writer) RoomTips(x *RoomTips) {
+	var bufBytes []byte
+	var length uint16
+
+	buf := bytes.NewBuffer(nil)
+	writer := NewWriter(buf, 0)
+	writer.StringUTF(&x.LevelID)
+	writer.Uint8(&x.GameType)
+	writer.StringUTF(&x.ConstantTestString)
+	writer.Int16(&x.Vioce)
+	writer.Uint8(&x.ProtocolID)
+
+	bufBytes, length = buf.Bytes(), uint16(buf.Len())
+	w.Uint16(&length)
+	w.Bytes(&bufBytes)
 }
 
 // Bytes appends a []byte to the underlying buffer.

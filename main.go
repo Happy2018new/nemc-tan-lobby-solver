@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/packet"
 	"github.com/OmineDev/flowers-for-machines/core/minecraft/raknet"
-	"github.com/df-mc/go-nethernet"
 )
 
 type SingleReader struct {
@@ -26,7 +24,11 @@ func (s *SingleReader) ReadPacket() ([]byte, error) {
 }
 
 func main() {
-	str := `fee301000084467b526bdff284bc3fc4ac361337884210b163c23fe75117ee2f7f2f19f014a771e7b50c4861707079323031386e6577`
+	// c, _, err := websocket.Dial(context.Background(), "ws://45.253.177.113:8899", nil)
+	// fmt.Println(c, err)
+	// return
+
+	str := `fee301000084467b523ecb37541914a5329658ff5c1ef4b231a0c0b69cc1af272befbcbf9df8bb511a0c4861707079323031386e6577`
 	bs, err := hex.DecodeString(str)
 	if err != nil {
 		panic(err)
@@ -48,8 +50,9 @@ func main() {
 	r := encoding.NewReader(buf)
 	loginRequest := packet.TanLoginRequest{}
 	loginRequest.Marshal(r)
+	fmt.Printf("%#v\n", loginRequest)
 
-	userToken := "nPs8yqZC9Ldr0b17"
+	userToken := "ULF8vgZfZSM5C4wH"
 	encryptedUserToken := MD5Sum([]byte(userToken))
 	encryptKeyBytes := []byte(string(encryptedUserToken) + string(loginRequest.Rand))
 	decryptKeyBytes := []byte(string(loginRequest.Rand) + string(encryptedUserToken))
@@ -80,7 +83,7 @@ func main() {
 	// pk.Marshal(r)
 	// return
 
-	conn, err := raknet.Dial("117.147.202.234:10000")
+	conn, err := raknet.Dial("117.147.202.226:10000")
 	if err != nil {
 		panic(err)
 	}
@@ -98,14 +101,40 @@ func main() {
 
 	dec.EnableEncryption(encryptKeyBytes, decryptKeyBytes)
 	// dec.EnableEncryption(decryptKeyBytes, decryptKeyBytes)
-	bs, err = hex.DecodeString(`fee3018c78fc0baa0f7b4a0cf8fc74c7ddfaacbcc6e8cbb67908fe868325609d42efb400565511dde44f54bbc97377360f3bd74fc3f184f39eec`)
+	bs, err = hex.DecodeString(`fee301018b89338d3ac3867e0f896d6fe89c4523f545fccff1399f506c35101bb7ec483d40f2b43eede63051ac0902d23fd726be8c38aea3a932`)
 	conn.Write(bs)
+	{
+		ddddd, err := packet.NewDecoder(NewSingleReader(bs))
+		if err != nil {
+			panic(err)
+		}
+		ddddd.EnableEncryption(encryptKeyBytes, encryptKeyBytes)
+		pkData, err = ddddd.Decode()
+		if err != nil {
+			panic(err)
+		}
+		buf = bytes.NewBuffer(pkData)
+		header = packet.Header{}
+		header.Read(buf)
+		r = encoding.NewReader(buf)
+		pk := packet.TanEnterRoomRequest{}
+		pk.Marshal(r)
+		fmt.Printf("%#v\n", pk)
+	}
 
 	bs, err = dec.Decode()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(bs)
+	{
+		buf = bytes.NewBuffer(bs)
+		header = packet.Header{}
+		header.Read(buf)
+		r = encoding.NewReader(buf)
+		pk := packet.TanEnterRoomResponse{}
+		pk.Marshal(r)
+		fmt.Printf("%#v\n", pk)
+	}
 
 	bs, err = dec.Decode()
 	if err != nil {
@@ -122,15 +151,19 @@ func main() {
 	// d := nethernet.Dialer{}
 	// d.DialContext(context.Background(), 0, 17508800308048208044, nil)
 
+	// 2219211602 (user id)
+	// 16134042324431409537
+	// 11417861250525914572
+
 	// nethernet.Dialer{}.DialContext()
 	// ll := nethernet.Listener{}
-	nethernet.Dialer{}.DialContext()
-	kfc, err := raknet.Dialer{}.DialContext(context.Background(), "10.99.20.169:19146")
+	// nethernet.Dialer{}.DialContext()
+	// kfc, err := raknet.Dialer{}.DialContext(context.Background(), "10.99.20.169:19146")
 	// kfc, err := raknet.Dial("10.99.20.169:19146")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(kfc)
+	// fmt.Println(kfc)
 
 	for {
 		bs, err := dec.Decode()

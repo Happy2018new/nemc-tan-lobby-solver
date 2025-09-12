@@ -2,6 +2,9 @@ package packet
 
 import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
+const TanLoginSuccess int8 = iota
+
+// TanLoginResponse ..
 type TanLoginResponse struct {
 	ErrorCode int8
 }

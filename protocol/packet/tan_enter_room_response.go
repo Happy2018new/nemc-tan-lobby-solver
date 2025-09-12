@@ -2,6 +2,9 @@ package packet
 
 import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
+const TanEnterRoomSuccess int8 = iota
+
+// TanEnterRoomResponse ..
 type TanEnterRoomResponse struct {
 	ErrorCode    int8
 	PlayerIDList []uint32
@@ -18,6 +21,9 @@ func (*TanEnterRoomResponse) BoundType() uint8 {
 
 func (t *TanEnterRoomResponse) Marshal(io encoding.IO) {
 	io.Int8(&t.ErrorCode)
+	if t.ErrorCode != TanEnterRoomSuccess {
+		return
+	}
 	encoding.FuncSliceUint8Length(io, &t.PlayerIDList, io.Uint32)
 	encoding.FuncSliceUint8Length(io, &t.ItemIDs, io.Uint64)
 }

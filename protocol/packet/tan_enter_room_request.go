@@ -2,6 +2,7 @@ package packet
 
 import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
+// TanEnterRoomRequest ..
 type TanEnterRoomRequest struct {
 	OwnerID               uint32
 	RoomID                uint32

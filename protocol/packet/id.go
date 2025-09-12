@@ -2,18 +2,49 @@ package packet
 
 const (
 	IDTanLoginRequest uint16 = iota
-	_
+	IDTanCreateRoomRequest
 	_
 	IDTanEnterRoomRequest
+	_
+	IDTanLeaveRoomRequest
+	IDTanKickOutRequest
+	_
+	_
+	IDTanChangeRoomPrivacyRequest // TODO
+	IDTanExtendWhiteListRequest   // TODO
+	IDTanShrinkWhiteListRequest   // TODO
+	IDTanSetTagListRequest        // TODO
+	IDChangeRoomInfoRequest       // TODO
+	_
+	_
+	_
+	_
+	_
+	_
+	IDTanSetRoomDisplayModListRequest // TODO
+	IDTanUpdateRoomPerformance        // TODO
 )
 
 const (
 	IDTanLoginResponse uint16 = iota
-	_
+	IDTanCreateRoomResponse
 	_
 	IDTanEnterRoomResponse
-	_
-	_
-	_
+	IDTanNewGuestResponse // TODO
+	IDTanLeaveRoomResponse
+	IDTanKickOutResponse
 	IDTanNotifyServerReady
+	_
+	_
+	_
+	_
+	IDTanSetTagListResponse  // TODO
+	IDChangeRoomInfoResponse // TODO
+	_
+	_
+	_
+	_
+	_
+	_
+	IDTanSetRoomDisplayModListResponse // TODO
 )

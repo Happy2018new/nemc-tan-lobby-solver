@@ -2,6 +2,7 @@ package packet
 
 import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
+// TanNotifyServerReady ..
 type TanNotifyServerReady struct {
 	ServerAddress         string
 	ServerRaknetGuid      string

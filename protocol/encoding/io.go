@@ -49,6 +49,7 @@ type IO interface {
 	Vec4(x *mgl32.Vec4)
 	RGB(x *color.RGBA)
 	RGBA(x *color.RGBA)
+	RoomTips(x *RoomTips)
 
 	Bytes(x *[]byte)
 	UnknownEnumOption(value any, enum string)

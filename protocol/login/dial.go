@@ -36,8 +36,7 @@ type Authenticator interface {
 // Dialer ..
 type Dialer struct {
 	Authenticator
-	tanLobbyLoginResp *auth.TanLobbyLoginResponse
-	clientNetherID    uint64
+	clientNetherID uint64
 }
 
 // Dial ..
@@ -224,7 +223,6 @@ func (d *Dialer) Dial() (conn net.Conn, err error) {
 	if !tanLobbyLoginResp.Success {
 		return nil, fmt.Errorf("Dial: %v", tanLobbyLoginResp.ErrorInfo)
 	}
-	d.tanLobbyLoginResp = &tanLobbyLoginResp
 
 	// Then get transfer server list
 	tanLobbyTransferServersResp, err := d.Authenticator.TransferServerList()

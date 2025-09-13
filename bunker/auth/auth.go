@@ -8,9 +8,8 @@ import (
 
 // TanLobbyLoginRequest ..
 type TanLobbyLoginRequest struct {
-	FBToken      string `json:"login_token"`
-	RoomID       string `json:"room_id"`
-	RoomPasscode string `json:"room_passcode"`
+	FBToken string `json:"login_token"`
+	RoomID  string `json:"room_id"`
 }
 
 // TanLobbyLoginResponse ..
@@ -31,12 +30,11 @@ type TanLobbyLoginResponse struct {
 	SignalingTicket []byte `json:"signaling_ticket"`
 }
 
-func (client *Client) Auth(roomID string, roomPasscode string, fbtoken string) (TanLobbyLoginResponse, error) {
+func (client *Client) Auth(roomID string, fbtoken string) (TanLobbyLoginResponse, error) {
 	// Pack request
 	request := TanLobbyLoginRequest{
-		FBToken:      fbtoken,
-		RoomID:       roomID,
-		RoomPasscode: roomPasscode,
+		FBToken: fbtoken,
+		RoomID:  roomID,
 	}
 	requestJsonBytes, _ := json.Marshal(request)
 

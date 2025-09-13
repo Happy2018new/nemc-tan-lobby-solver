@@ -32,7 +32,7 @@ func (aw *AccessWrapper) GetRoomPasscode() string {
 
 // GetAccess ..
 func (aw *AccessWrapper) GetAccess() (TanLobbyLoginResponse, error) {
-	tanLobbyLoginResp, err := aw.Client.Auth(aw.RoomID, aw.RoomPasscode, aw.Token)
+	tanLobbyLoginResp, err := aw.Client.Auth(aw.RoomID, aw.Token)
 	if err != nil {
 		return TanLobbyLoginResponse{}, fmt.Errorf("GetAccess: %v", err)
 	}

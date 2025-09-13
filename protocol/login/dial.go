@@ -114,7 +114,7 @@ func (d *Dialer) raknetDialer(
 func (d *Dialer) enterTanLobbyRoom(
 	tanLobbyLoginResp auth.TanLobbyLoginResponse,
 	tanLobbyTransferServersResp auth.TanLobbyTransferServersResponse,
-) (pk packet.Packet, raknetAddress string, success bool) {
+) (pk packet.Packet, raknetAddress string, wrongPasscode bool, success bool) {
 	// Prepare
 	var raknetServerMu sync.Mutex
 	var possibleRaknetServers []string
@@ -122,7 +122,7 @@ func (d *Dialer) enterTanLobbyRoom(
 	// Parse basic info and generate client nether ID
 	roomID, err := strconv.ParseUint(d.Authenticator.GetRoomID(), 10, 32)
 	if err != nil {
-		return nil, "", false
+		return nil, "", false, false
 	}
 	d.clientNetherID = rand.Uint64N(math.MaxUint64)
 
@@ -147,7 +147,7 @@ func (d *Dialer) enterTanLobbyRoom(
 		fmt.Printf("Find possible available raknet servers: %v\n", possibleRaknetServers)
 	}
 	if len(possibleRaknetServers) == 0 {
-		return nil, "", false
+		return nil, "", false, false
 	}
 
 	// Find final raknet server
@@ -186,6 +186,9 @@ func (d *Dialer) enterTanLobbyRoom(
 			continue
 		}
 		if tanEnterRoomResp.ErrorCode != packet.TanEnterRoomSuccess {
+			if tanEnterRoomResp.ErrorCode == packet.TanEnterRoomWrongPasscode {
+				return nil, "", true, false
+			}
 			_ = conn.Close()
 			continue
 		}
@@ -199,14 +202,14 @@ func (d *Dialer) enterTanLobbyRoom(
 		switch pk.(type) {
 		case *packet.TanNotifyServerReady, *packet.TanKickOutResponse:
 			_ = conn.Close()
-			return pk, address, true
+			return pk, address, false, true
 		default:
 			_ = conn.Close()
 		}
 	}
 
 	// Return unsuccessful
-	return nil, "", false
+	return nil, "", false, false
 }
 
 // Dial ..
@@ -235,7 +238,10 @@ func (d *Dialer) Dial() (conn net.Conn, err error) {
 
 	// Enter tan lobby room
 	for range DefaultRaknetServerRepeatTimes {
-		pk, addr, success := d.enterTanLobbyRoom(tanLobbyLoginResp, tanLobbyTransferServersResp)
+		pk, addr, wrongPasscode, success := d.enterTanLobbyRoom(tanLobbyLoginResp, tanLobbyTransferServersResp)
+		if wrongPasscode {
+			return nil, fmt.Errorf("Dial: Provided room passcode is incorrect")
+		}
 		if !success {
 			continue
 		}

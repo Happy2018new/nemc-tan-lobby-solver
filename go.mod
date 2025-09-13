@@ -21,6 +21,7 @@ require (
 	github.com/containerd/console v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gookit/color v1.5.4 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
@@ -35,14 +36,16 @@ require (
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
-	github.com/OmineDev/flowers-for-machines v1.4.5
 	github.com/coder/websocket v1.8.14
 	github.com/database64128/chacha8-go v0.0.0-20250815115417-e0f2726d8bd0
+	github.com/go-jose/go-jose/v3 v3.0.4
+	github.com/golang/snappy v1.0.0
+	github.com/klauspost/compress v1.18.0
+	github.com/muhammadmuzzammil1998/jsonc v1.0.0
 	github.com/pion/dtls/v3 v3.0.7
 	github.com/pion/interceptor v0.1.40
 	github.com/pion/rtcp v1.2.15
@@ -53,5 +56,7 @@ require (
 	github.com/pterm/pterm v0.12.81
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/stretchr/testify v1.11.1
+	github.com/ugorji/go/codec v1.3.0
 	golang.org/x/net v0.41.0
+	golang.org/x/text v0.29.0
 )

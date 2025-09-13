@@ -172,7 +172,7 @@ func (d *Dialer) enterTanLobbyRoom(
 			EnterToken:            0,
 			FollowTeamID:          0,
 			NetherNetID:           fmt.Sprintf("%d", d.clientNetherID),
-			SupportWebRTCCompress: false,
+			SupportWebRTCCompress: true,
 		})
 		if err != nil {
 			_ = conn.Close()
@@ -203,11 +203,7 @@ func (d *Dialer) enterTanLobbyRoom(
 		}
 		switch pk.(type) {
 		case *packet.TanNotifyServerReady, *packet.TanKickOutResponse:
-			go func() {
-				for {
-					fmt.Println(d.readRaknetPacket(dec))
-				}
-			}()
+			_ = conn.Close()
 			return pk, address, true
 		default:
 			_ = conn.Close()
@@ -289,6 +285,7 @@ func (d *Dialer) Dial() (conn net.Conn, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("Dial: %v", err)
 	}
+	defer wsConn.Close()
 
 	// Connect to remote room
 	mcCTX, mcCTXCancel := context.WithTimeout(context.Background(), time.Second*30)

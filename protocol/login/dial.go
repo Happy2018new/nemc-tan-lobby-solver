@@ -22,7 +22,7 @@ import (
 const (
 	EnableDebug                     = true
 	DefaultRaknetServerCollectTimes = time.Second * 5
-	DefaultRaknetServerRepeatTimes  = 10
+	DefaultRaknetServerRepeatTimes  = 6
 )
 
 // Authenticator ..
@@ -251,6 +251,9 @@ func (d *Dialer) Dial() (conn net.Conn, err error) {
 
 		raknetAddress = addr
 		break
+	}
+	if len(raknetAddress) == 0 {
+		return nil, fmt.Errorf("Dial: No available raknet server was found")
 	}
 
 	// Find websocket server address

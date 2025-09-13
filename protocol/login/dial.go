@@ -275,7 +275,9 @@ func (d *Dialer) Dial() (conn net.Conn, err error) {
 	// Connect to websocket server
 	wsCTX, wsCTXCancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer wsCTXCancel()
-	wsConn, err := signaling.Dialer{}.DialContext(
+	wsConn, err := signaling.Dialer{
+		NetworkID: d.clientNetherID,
+	}.DialContext(
 		wsCTX,
 		websocketAddress,
 		d.clientNetherID,
@@ -291,7 +293,7 @@ func (d *Dialer) Dial() (conn net.Conn, err error) {
 	// Connect to remote room
 	mcCTX, mcCTXCancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer mcCTXCancel()
-	conn, err = nethernet.Dialer{ConnectionID: d.clientNetherID}.DialContext(
+	conn, err = nethernet.Dialer{}.DialContext(
 		mcCTX,
 		remoteNetherNetID,
 		wsConn,

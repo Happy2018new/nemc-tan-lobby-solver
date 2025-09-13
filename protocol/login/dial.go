@@ -40,10 +40,7 @@ type Dialer struct {
 	clientNetherID    uint64
 }
 
-// DialContext dials a Minecraft connection to the address passed over the network passed. The network is
-// typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
-// If a connection is not established before the context passed is cancelled, DialContext returns an error.
-// DialContext uses a zero value of Dialer to initiate the connection.
+// Dial ..
 func Dial(authenticator Authenticator) (net.Conn, error) {
 	dialer := Dialer{Authenticator: authenticator}
 	conn, err := dialer.Dial()
@@ -213,9 +210,7 @@ func (d *Dialer) enterTanLobbyRoom(
 	return nil, "", false
 }
 
-// DialContext dials a Minecraft connection to the address passed over the network passed. The network is
-// typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
-// If a connection is not established before the context passed is cancelled, DialContext returns an error.
+// Dial ..
 func (d *Dialer) Dial() (conn net.Conn, err error) {
 	var raknetAddress string
 	var websocketAddress string

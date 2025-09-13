@@ -91,25 +91,13 @@ type Dialer struct {
 	KeepXBLIdentityData bool
 }
 
-// PhoenixBuilder specific changes.
-// Author: Happy2018new
-//
-// DialContext dials a Minecraft connection to the address passed over the network passed. The network is
-// typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
-// If a connection is not established before the context passed is cancelled, DialContext returns an error.
-// DialContext uses a zero value of Dialer to initiate the connection.
+// DialContext ..
 func DialContext(ctx context.Context, netConn net.Conn) (*Conn, error) {
-	// func DialContext(ctx context.Context, network string) (*Conn, error) {
 	var d Dialer
 	return d.DialContext(ctx, netConn)
 }
 
-// PhoenixBuilder specific func, which modified from orgin version.
-// Author: LNSSPsd, CMA2401PT, Liliya233, Happy2018new
-//
-// DialContext dials a Minecraft connection to the address passed over the network passed. The network is
-// typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
-// If a connection is not established before the context passed is cancelled, DialContext returns an error.
+// DialContext ..
 func (d Dialer) DialContext(ctx context.Context, netConn net.Conn) (*Conn, error) {
 	key, _ := ecdsa.GenerateKey(elliptic.P384(), cryptoRand.Reader)
 

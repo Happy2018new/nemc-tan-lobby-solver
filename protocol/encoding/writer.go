@@ -7,8 +7,8 @@ import (
 	"io"
 	"unsafe"
 
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/nbt"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding/basic_encoding"
-	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/nbt"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/google/uuid"
 )

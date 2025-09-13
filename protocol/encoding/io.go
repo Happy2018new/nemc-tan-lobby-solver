@@ -3,7 +3,7 @@ package encoding
 import (
 	"image/color"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/nbt"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/nbt"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/google/uuid"
 )

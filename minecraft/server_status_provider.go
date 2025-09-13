@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/raknet"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
 )
 
 // ServerStatusProvider represents a type that is able to provide the visual status of a server, in specific

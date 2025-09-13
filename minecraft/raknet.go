@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft/raknet"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
 )
 
 // RakNet is an implementation of a RakNet v10 Network.

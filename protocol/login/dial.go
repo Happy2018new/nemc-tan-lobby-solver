@@ -69,16 +69,12 @@ func (d *Dialer) raknetDialer(
 	if err != nil {
 		return nil, nil, nil, false
 	}
-	defer func() {
-		if conn != nil && !success {
-			_ = conn.Close()
-		}
-	}()
 
 	// Set encoder and decoder
 	enc = packet.NewEncoder(conn)
 	dec, err = packet.NewDecoder(conn)
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, false
 	}
 
@@ -90,19 +86,23 @@ func (d *Dialer) raknetDialer(
 		PlayerName: tanLobbyLoginResp.UserPlayerName,
 	})
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, false
 	}
 
 	// Handle login response
 	pk, err := d.readRaknetPacket(dec)
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, false
 	}
 	tanLoginResp, ok := pk.(*packet.TanLoginResponse)
 	if !ok {
+		_ = conn.Close()
 		return nil, nil, nil, false
 	}
 	if tanLoginResp.ErrorCode != packet.TanLoginSuccess {
+		_ = conn.Close()
 		return nil, nil, nil, false
 	}
 
@@ -111,8 +111,7 @@ func (d *Dialer) raknetDialer(
 	dec.EnableEncryption(tanLobbyLoginResp.EncryptKeyBytes, tanLobbyLoginResp.DecryptKeyBytes)
 
 	// Return
-	success = true
-	return conn, enc, dec, success
+	return conn, enc, dec, true
 }
 
 // enterTanLobbyRoom ..

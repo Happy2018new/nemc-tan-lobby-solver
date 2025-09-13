@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -9,18 +8,6 @@ import (
 	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/login"
 )
-
-type SingleReader struct {
-	*bytes.Buffer
-}
-
-func NewSingleReader(bs []byte) *SingleReader {
-	return &SingleReader{Buffer: bytes.NewBuffer(bs)}
-}
-
-func (s *SingleReader) ReadPacket() ([]byte, error) {
-	return s.Bytes(), nil
-}
 
 func main() {
 	client, err := auth.CreateClient(&auth.ClientOptions{

@@ -22,7 +22,7 @@ import (
 const (
 	EnableDebug                     = true
 	DefaultRaknetServerCollectTimes = time.Second * 5
-	DefaultRaknetServerRepeatTimes  = 30
+	DefaultRaknetServerRepeatTimes  = 10
 )
 
 // Authenticator ..

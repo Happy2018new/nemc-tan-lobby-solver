@@ -3,9 +3,6 @@ package nethernet
 import (
 	"errors"
 	"fmt"
-	"github.com/pion/ice/v4"
-	"github.com/pion/sdp/v3"
-	"github.com/Happy2018new/nemc-tan-lobby-solver/core/webrtc"
 	"io"
 	"log/slog"
 	"math/rand"
@@ -15,6 +12,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/webrtc"
+	"github.com/pion/ice/v4"
+	"github.com/pion/sdp/v3"
 )
 
 // Conn is an implementation of [net.Conn] for a peer connection between a specific remote
@@ -110,17 +111,21 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		for i := 0; i < len(b); i += maxMessageSize {
 			segments--
 
-			end := i + maxMessageSize
-			if end > len(b) {
-				end = len(b)
-			}
+			end := min(i+maxMessageSize, len(b))
 			frag := b[i:end]
-			if err := c.reliable.Send(append([]byte{segments}, frag...)); err != nil {
+
+			if segments != 0 {
+				err = c.reliable.Send(append([]byte{1}, frag...))
+			} else {
+				err = c.reliable.Send(append([]byte{0}, frag...))
+			}
+			if err != nil {
 				if errors.Is(err, io.ErrClosedPipe) {
 					err = net.ErrClosed
 				}
 				return n, fmt.Errorf("write segment #%d: %w", segments, err)
 			}
+
 			n += len(frag)
 		}
 		return n, nil

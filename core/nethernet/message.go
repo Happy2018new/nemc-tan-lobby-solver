@@ -32,12 +32,8 @@ func (c *Conn) handleMessage(b []byte) error {
 	msg, err := parseMessage(b)
 	if err != nil {
 		return fmt.Errorf("parse: %w", err)
-	} else if c.message.segments > 0 && c.message.segments-1 != msg.segments {
-		// PhoenixBuilder specific changes.
-		// Author: Happy2018new
-		//
-		// return fmt.Errorf("invalid promised segments: expected %d, got %d", c.message.segments-1, msg.segments)
 	}
+
 	c.message.segments = msg.segments
 	c.message.data = append(c.message.data, msg.data...)
 	if c.message.segments > 0 {

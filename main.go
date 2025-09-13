@@ -33,10 +33,11 @@ func main() {
 		panic(err)
 	}
 
-	wrapper := auth.NewAccessWrapper(cli, "649145", "", "...")
+	wrapper := auth.NewAccessWrapper(cli, "484434", "", "...")
 	// resp, err := wrapper.RaknetServerList()
 	// fmt.Printf("%#v, %v\n", resp, err)
-	fmt.Println(login.Dial(wrapper))
+	sss, err := login.Dial(wrapper)
+	fmt.Println(sss, err)
 	return
 
 	str := `fee301000084467b5293e06c151956a4decdd8b3fc5f51e9511be51cceada7a6d355877b47dc7d92100c4861707079323031386e6577`

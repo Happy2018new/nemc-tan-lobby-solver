@@ -3,21 +3,20 @@ package login
 import (
 	"context"
 	_ "embed"
-	"encoding/base64"
 	"fmt"
 	"math"
 	"math/rand/v2"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/nethernet"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/login/signaling"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/packet"
-	"github.com/Happy2018new/nemc-tan-lobby-solver/raknet"
-	"github.com/gorilla/websocket"
 )
 
 const (
@@ -45,7 +44,7 @@ type Dialer struct {
 // typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
 // If a connection is not established before the context passed is cancelled, DialContext returns an error.
 // DialContext uses a zero value of Dialer to initiate the connection.
-func Dial(authenticator Authenticator) (*net.Conn, error) {
+func Dial(authenticator Authenticator) (net.Conn, error) {
 	dialer := Dialer{Authenticator: authenticator}
 	conn, err := dialer.Dial()
 	if err != nil {
@@ -116,81 +115,8 @@ func (d *Dialer) raknetDialer(
 	return conn, enc, dec, success
 }
 
-// DialContext dials a Minecraft connection to the address passed over the network passed. The network is
-// typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
-// If a connection is not established before the context passed is cancelled, DialContext returns an error.
-func (d *Dialer) Dial() (conn *net.Conn, err error) {
-	var raknetAddress string
-	var websocketAddress string
-
-	// First we query room info
-	tanLobbyLoginResp, err := d.Authenticator.GetAccess()
-	if err != nil {
-		return nil, nil
-	}
-	if !tanLobbyLoginResp.Success {
-		return nil, fmt.Errorf("Dial: %v", tanLobbyLoginResp.ErrorInfo)
-	}
-	d.tanLobbyLoginResp = &tanLobbyLoginResp
-
-	// Then get transfer server list
-	tanLobbyTransferServersResp, err := d.Authenticator.TransferServerList()
-	if err != nil {
-		return nil, nil
-	}
-	if !tanLobbyTransferServersResp.Success {
-		return nil, fmt.Errorf("Dial: %v", tanLobbyTransferServersResp.ErrorInfo)
-	}
-
-	// Enter room
-	for range DefaultRaknetServerRepeatTimes {
-		pk, addr, success := d.internalDial(tanLobbyLoginResp, tanLobbyTransferServersResp)
-		if !success {
-			continue
-		}
-
-		if _, ok := pk.(*packet.TanKickOutResponse); ok {
-			return nil, fmt.Errorf("Dial: The host owner kick you from the room")
-		}
-
-		raknetAddress = addr
-		break
-	}
-
-	// Find websocket server address
-	websocketServerIP := strings.Split(raknetAddress, ":")[0]
-	for _, value := range tanLobbyTransferServersResp.WebsocketServers {
-		if strings.Contains(value, websocketServerIP) {
-			websocketAddress = value
-			break
-		}
-	}
-	if len(websocketAddress) == 0 {
-		return nil, fmt.Errorf("Dial: No available websocket server was found")
-	}
-
-	// Connect to websocket server
-	httpHeader := http.Header{}
-	httpHeader.Set("Authorization", "NeteaseSignalingAuthToken")
-	wsConn, resp, err := websocket.DefaultDialer.Dial(
-		fmt.Sprintf(
-			"ws://%s/%d/%d/%s/%s",
-			websocketAddress,
-			d.clientNetherID,
-			tanLobbyLoginResp.UserUniqueID,
-			base64.URLEncoding.EncodeToString(tanLobbyLoginResp.SignalingSeed),
-			base64.URLEncoding.EncodeToString(tanLobbyLoginResp.SignalingTicket),
-		),
-		httpHeader,
-	)
-	fmt.Println(wsConn, resp, err)
-
-	// STILL WIP
-
-	return nil, nil
-}
-
-func (d *Dialer) internalDial(
+// enterTanLobbyRoom ..
+func (d *Dialer) enterTanLobbyRoom(
 	tanLobbyLoginResp auth.TanLobbyLoginResponse,
 	tanLobbyTransferServersResp auth.TanLobbyTransferServersResponse,
 ) (pk packet.Packet, raknetAddress string, success bool) {
@@ -246,7 +172,7 @@ func (d *Dialer) internalDial(
 			EnterToken:            0,
 			FollowTeamID:          0,
 			NetherNetID:           fmt.Sprintf("%d", d.clientNetherID),
-			SupportWebRTCCompress: true,
+			SupportWebRTCCompress: false,
 		})
 		if err != nil {
 			_ = conn.Close()
@@ -277,7 +203,11 @@ func (d *Dialer) internalDial(
 		}
 		switch pk.(type) {
 		case *packet.TanNotifyServerReady, *packet.TanKickOutResponse:
-			_ = conn.Close()
+			go func() {
+				for {
+					fmt.Println(d.readRaknetPacket(dec))
+				}
+			}()
 			return pk, address, true
 		default:
 			_ = conn.Close()
@@ -286,4 +216,92 @@ func (d *Dialer) internalDial(
 
 	// Return unsuccessful
 	return nil, "", false
+}
+
+// DialContext dials a Minecraft connection to the address passed over the network passed. The network is
+// typically "raknet". A Conn is returned which may be used to receive packets from and send packets to.
+// If a connection is not established before the context passed is cancelled, DialContext returns an error.
+func (d *Dialer) Dial() (conn net.Conn, err error) {
+	var raknetAddress string
+	var websocketAddress string
+	var remoteNetherNetID uint64
+
+	// First we query room info
+	tanLobbyLoginResp, err := d.Authenticator.GetAccess()
+	if err != nil {
+		return nil, nil
+	}
+	if !tanLobbyLoginResp.Success {
+		return nil, fmt.Errorf("Dial: %v", tanLobbyLoginResp.ErrorInfo)
+	}
+	d.tanLobbyLoginResp = &tanLobbyLoginResp
+
+	// Then get transfer server list
+	tanLobbyTransferServersResp, err := d.Authenticator.TransferServerList()
+	if err != nil {
+		return nil, nil
+	}
+	if !tanLobbyTransferServersResp.Success {
+		return nil, fmt.Errorf("Dial: %v", tanLobbyTransferServersResp.ErrorInfo)
+	}
+
+	// Enter tan lobby room
+	for range DefaultRaknetServerRepeatTimes {
+		pk, addr, success := d.enterTanLobbyRoom(tanLobbyLoginResp, tanLobbyTransferServersResp)
+		if !success {
+			continue
+		}
+
+		switch p := pk.(type) {
+		case *packet.TanNotifyServerReady:
+			remoteNetherNetID, _ = strconv.ParseUint(p.NetherNetID, 10, 64)
+		case *packet.TanKickOutResponse:
+			return nil, fmt.Errorf("Dial: The host owner kick you from the room")
+		}
+
+		raknetAddress = addr
+		break
+	}
+
+	// Find websocket server address
+	websocketServerIP := strings.Split(raknetAddress, ":")[0]
+	for _, value := range tanLobbyTransferServersResp.WebsocketServers {
+		if strings.Contains(value, websocketServerIP) {
+			websocketAddress = value
+			break
+		}
+	}
+	if len(websocketAddress) == 0 {
+		return nil, fmt.Errorf("Dial: No available websocket server was found")
+	}
+
+	// Connect to websocket server
+	wsCTX, wsCTXCancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer wsCTXCancel()
+	wsConn, err := signaling.Dialer{}.DialContext(
+		wsCTX,
+		websocketAddress,
+		d.clientNetherID,
+		tanLobbyLoginResp.UserUniqueID,
+		tanLobbyLoginResp.SignalingSeed,
+		tanLobbyLoginResp.SignalingTicket,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Dial: %v", err)
+	}
+
+	// Connect to remote room
+	mcCTX, mcCTXCancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer mcCTXCancel()
+	conn, err = nethernet.Dialer{ConnectionID: d.clientNetherID}.DialContext(
+		mcCTX,
+		remoteNetherNetID,
+		wsConn,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Dial: %v", err)
+	}
+
+	// Return
+	return conn, nil
 }

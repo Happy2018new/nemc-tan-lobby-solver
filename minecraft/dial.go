@@ -123,7 +123,7 @@ func (d Dialer) DialContext(ctx context.Context, netConn net.Conn) (*Conn, error
 		d.FlushRate = time.Second / 20
 	}
 
-	conn := newConn(netConn, key, d.ErrorLog, d.Protocol, d.FlushRate, false)
+	conn := newConn(netConn, false, key, d.ErrorLog, d.Protocol, d.FlushRate, false)
 	conn.pool = conn.proto.Packets(false)
 	conn.identityData = d.IdentityData
 	conn.clientData = d.ClientData

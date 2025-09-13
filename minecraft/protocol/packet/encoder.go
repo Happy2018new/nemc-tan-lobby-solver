@@ -15,14 +15,18 @@ import (
 type Encoder struct {
 	w io.Writer
 
+	writeHeader bool
 	compression Compression
 	encrypt     *encrypt
 }
 
 // NewEncoder returns a new Encoder for the io.Writer passed. Each final packet produced by the Encoder is
 // sent with a single call to io.Writer.Write().
-func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w: w}
+func NewEncoder(w io.Writer, writeHeader bool) *Encoder {
+	return &Encoder{
+		w:           w,
+		writeHeader: writeHeader,
+	}
 }
 
 // EnableEncryption enables encryption for the Encoder using the secret key bytes passed. Each packet sent
@@ -89,11 +93,10 @@ func (encoder *Encoder) Encode(packets [][]byte) error {
 	}
 
 	data := buf.Bytes()
-	prepend := []byte{header}
-
-	// PhoenixBuilder specific changes.
-	// Author: Happy2018new
-	prepend = make([]byte, 0)
+	prepend := make([]byte, 0)
+	if encoder.writeHeader {
+		prepend = []byte{header}
+	}
 
 	if encoder.compression != nil {
 		var err error

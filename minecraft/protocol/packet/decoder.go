@@ -22,6 +22,7 @@ type Decoder struct {
 	// NewDecoder implements the packetReader interface.
 	pr packetReader
 
+	readHeader         bool
 	decompress         bool
 	compression        Compression
 	readCompressID     bool
@@ -39,13 +40,18 @@ type packetReader interface {
 
 // NewDecoder returns a new decoder decoding data from the io.Reader passed. One read call from the reader is
 // assumed to consume an entire packet.
-func NewDecoder(reader io.Reader) *Decoder {
+func NewDecoder(reader io.Reader, readHeader bool) *Decoder {
 	if pr, ok := reader.(packetReader); ok {
-		return &Decoder{checkPacketLimit: true, pr: pr}
+		return &Decoder{
+			pr:               pr,
+			readHeader:       readHeader,
+			checkPacketLimit: true,
+		}
 	}
 	return &Decoder{
 		r:                reader,
 		buf:              make([]byte, 1024*1024*3),
+		readHeader:       readHeader,
 		checkPacketLimit: true,
 	}
 }
@@ -124,15 +130,12 @@ func (decoder *Decoder) Decode() (packets [][]byte, err error) {
 		return nil, nil
 	}
 
-	// PhoenixBuilder specific changes.
-	// Author: Happy2018new
-	//
-	/*
+	if decoder.readHeader {
 		if data[0] != header {
 			return nil, fmt.Errorf("decode batch: invalid header %x, expected %x", data[0], header)
 		}
 		data = data[1:]
-	*/
+	}
 
 	if decoder.encrypt != nil {
 		decoder.encrypt.decrypt(data)

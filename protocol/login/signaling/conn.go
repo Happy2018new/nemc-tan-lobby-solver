@@ -14,7 +14,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-const EnableDebug = true
+const EnableDebug = false
 
 type Conn struct {
 	conn *websocket.Conn

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	EnableDebug                     = true
+	EnableDebug                     = false
 	DefaultRaknetServerCollectTimes = time.Second * 5
 	DefaultRaknetServerRepeatTimes  = 6
 )

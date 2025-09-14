@@ -11,12 +11,12 @@ type AccessWrapper struct {
 }
 
 // NewAccessWrapper ..
-func NewAccessWrapper(Client *Client, roomID string, roomPasscode string, token string) *AccessWrapper {
+func NewAccessWrapper(client *Client, roomID string, roomPasscode string, token string) *AccessWrapper {
 	return &AccessWrapper{
 		RoomID:       roomID,
 		RoomPasscode: roomPasscode,
 		Token:        token,
-		Client:       Client,
+		Client:       client,
 	}
 }
 

@@ -4,6 +4,7 @@ import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
 const (
 	TanEnterRoomSuccess       int8 = iota
+	TanEnterRoomNotFound      int8 = 1
 	TanEnterRoomFullOfPeople  int8 = 4
 	TanEnterRoomWrongPasscode int8 = 14
 )

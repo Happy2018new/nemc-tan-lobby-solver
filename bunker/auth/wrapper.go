@@ -38,12 +38,3 @@ func (aw *AccessWrapper) GetAccess() (TanLobbyLoginResponse, error) {
 	}
 	return tanLobbyLoginResp, nil
 }
-
-// TransferServerList ..
-func (aw *AccessWrapper) TransferServerList() (TanLobbyTransferServersResponse, error) {
-	tanLobbyTransferServersResp, err := aw.Client.TransferServerList(aw.Token)
-	if err != nil {
-		return TanLobbyTransferServersResponse{}, fmt.Errorf("TransferServerList: %v", err)
-	}
-	return tanLobbyTransferServersResp, nil
-}

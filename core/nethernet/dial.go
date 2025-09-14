@@ -135,6 +135,10 @@ func (d Dialer) DialContext(ctx context.Context, networkID uint64, signaling Sig
 			stop()
 			return nil, fmt.Errorf("notified error from signaling: %w", err)
 		case signal := <-n.signals:
+			if signal == nil {
+				stop()
+				return nil, fmt.Errorf("received nil signal")
+			}
 			if signal.Type != SignalTypeAnswer {
 				d.signalError(signaling, networkID, ErrorCodeIncomingConnectionIgnored)
 				return nil, fmt.Errorf("received signal for non-answer: %s", signal.String())
@@ -278,6 +282,9 @@ func (d Dialer) handleConn(ctx context.Context, conn *Conn, signals <-chan *Sign
 		case <-conn.closed:
 			return
 		case signal := <-signals:
+			if signal == nil {
+				return
+			}
 			switch signal.Type {
 			case SignalTypeCandidate, SignalTypeError:
 				if err := conn.handleSignal(signal); err != nil {

@@ -10,6 +10,12 @@ import (
 
 // readRaknetPacket ..
 func (d *Dialer) readRaknetPacket(decoder *packet.Decoder) (pk packet.Packet, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("readRaknetPacket: %v", r)
+		}
+	}()
+
 	pkData, err := decoder.Decode()
 	if err != nil {
 		return nil, fmt.Errorf("readRaknetPacket: %v", err)
@@ -26,7 +32,7 @@ func (d *Dialer) readRaknetPacket(decoder *packet.Decoder) (pk packet.Packet, er
 
 	pk = packet.NewServerPool()[header.PacketID]
 	if pk == nil {
-		return nil, nil
+		return nil, fmt.Errorf("readRaknetPacket: unsupported packet %d; payload = %#v", header.PacketID, buf.Bytes())
 	}
 
 	pk.Marshal(reader)

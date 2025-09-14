@@ -7,8 +7,6 @@ import (
 	"math/rand/v2"
 	"net"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
@@ -18,18 +16,11 @@ import (
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/packet"
 )
 
-const (
-	EnableDebug                     = false
-	DefaultRaknetServerCollectTimes = time.Second * 5
-	DefaultRaknetServerRepeatTimes  = 6
-)
-
 // Authenticator ..
 type Authenticator interface {
 	GetRoomID() string
 	GetRoomPasscode() string
 	GetAccess() (auth.TanLobbyLoginResponse, error)
-	TransferServerList() (auth.TanLobbyTransferServersResponse, error)
 }
 
 // Dialer ..
@@ -40,37 +31,52 @@ type Dialer struct {
 
 // Dial ..
 func Dial(authenticator Authenticator) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
 	dialer := Dialer{Authenticator: authenticator}
-	conn, err := dialer.Dial()
+	conn, err := dialer.DialContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Dial: %v", err)
+	}
+
+	return conn, nil
+}
+
+// DialContext ..
+func DialContext(ctx context.Context, authenticator Authenticator) (net.Conn, error) {
+	dialer := Dialer{Authenticator: authenticator}
+	conn, err := dialer.DialContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("DialContext: %v", err)
 	}
 	return conn, nil
 }
 
-// raknetDialer ..
-func (d *Dialer) raknetDialer(
-	ctx context.Context,
-	address string,
-	tanLobbyLoginResp auth.TanLobbyLoginResponse,
-) (
-	conn net.Conn,
-	enc *packet.Encoder,
-	dec *packet.Decoder,
-	success bool,
+// enterTanLobbyRoom ..
+func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.TanLobbyLoginResponse) (
+	remoteNetherNetID uint64,
+	err error,
 ) {
-	// Create conn
-	conn, err := raknet.DialContext(ctx, address)
+	// Generate client nether ID and parse basic info
+	d.clientNetherID = rand.Uint64()
+	roomID, err := strconv.ParseUint(d.Authenticator.GetRoomID(), 10, 32)
 	if err != nil {
-		return nil, nil, nil, false
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
 
-	// Set encoder and decoder
-	enc = packet.NewEncoder(conn)
-	dec, err = packet.NewDecoder(conn)
+	// Create conn
+	conn, err := raknet.DialContext(ctx, tanLobbyLoginResp.RaknetServerAddress)
 	if err != nil {
-		_ = conn.Close()
-		return nil, nil, nil, false
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
+	}
+	defer conn.Close()
+
+	// Set encoder and decoder
+	enc := packet.NewEncoder(conn)
+	dec, err := packet.NewDecoder(conn)
+	if err != nil {
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
 
 	// Send login request
@@ -81,236 +87,134 @@ func (d *Dialer) raknetDialer(
 		PlayerName: tanLobbyLoginResp.UserPlayerName,
 	})
 	if err != nil {
-		_ = conn.Close()
-		return nil, nil, nil, false
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
 
 	// Handle login response
 	pk, err := d.readRaknetPacket(dec)
 	if err != nil {
-		_ = conn.Close()
-		return nil, nil, nil, false
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
 	tanLoginResp, ok := pk.(*packet.TanLoginResponse)
 	if !ok {
-		_ = conn.Close()
-		return nil, nil, nil, false
+		return 0, fmt.Errorf("enterTanLobbyRoom: Expect the incoming packet is *packet.TanLoginResponse, but got %#v", pk)
 	}
 	if tanLoginResp.ErrorCode != packet.TanLoginSuccess {
-		_ = conn.Close()
-		return nil, nil, nil, false
+		return 0, fmt.Errorf("enterTanLobbyRoom: Login failed (code = %d)", tanLoginResp.ErrorCode)
 	}
 
 	// Enable encryption
 	enc.EnableEncryption(tanLobbyLoginResp.EncryptKeyBytes, tanLobbyLoginResp.DecryptKeyBytes)
 	dec.EnableEncryption(tanLobbyLoginResp.EncryptKeyBytes, tanLobbyLoginResp.DecryptKeyBytes)
 
-	// Return
-	return conn, enc, dec, true
-}
-
-// enterTanLobbyRoom ..
-func (d *Dialer) enterTanLobbyRoom(
-	tanLobbyLoginResp auth.TanLobbyLoginResponse,
-	tanLobbyTransferServersResp auth.TanLobbyTransferServersResponse,
-) (
-	pk packet.Packet,
-	raknetAddress string,
-	wrongPasscode bool,
-	roomFullOfPeople bool,
-	success bool,
-) {
-	// Prepare
-	var raknetServerMu sync.Mutex
-	var possibleRaknetServers []string
-
-	// Parse basic info and generate client nether ID
-	roomID, err := strconv.ParseUint(d.Authenticator.GetRoomID(), 10, 32)
+	// Enter room
+	err = d.writeRaknetPacket(enc, &packet.TanEnterRoomRequest{
+		OwnerID:               tanLobbyLoginResp.RoomOwnerID,
+		RoomID:                uint32(roomID),
+		EnterPassword:         d.Authenticator.GetRoomPasscode(),
+		EnterTeamID:           0,
+		EnterToken:            0,
+		FollowTeamID:          0,
+		NetherNetID:           fmt.Sprintf("%d", d.clientNetherID),
+		SupportWebRTCCompress: true,
+	})
 	if err != nil {
-		return nil, "", false, false, false
-	}
-	d.clientNetherID = rand.Uint64()
-
-	// Get available raknet server
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRaknetServerCollectTimes)
-	defer cancel()
-	for _, value := range tanLobbyTransferServersResp.RaknetServers {
-		go func() {
-			conn, _, _, success := d.raknetDialer(ctx, value, tanLobbyLoginResp)
-			if success {
-				raknetServerMu.Lock()
-				defer raknetServerMu.Unlock()
-				possibleRaknetServers = append(possibleRaknetServers, value)
-				_ = conn.Close()
-			}
-		}()
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
 
-	// Check possible raknet servers
-	<-ctx.Done()
-	if EnableDebug {
-		fmt.Printf("Find possible available raknet servers: %v\n", possibleRaknetServers)
+	// Handle enter room response
+	pk, err = d.readRaknetPacket(dec)
+	if err != nil {
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
-	if len(possibleRaknetServers) == 0 {
-		return nil, "", false, false, false
+	tanEnterRoomResp, ok := pk.(*packet.TanEnterRoomResponse)
+	if !ok {
+		return 0, fmt.Errorf("enterTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
+	}
+	if tanEnterRoomResp.ErrorCode != packet.TanEnterRoomSuccess {
+		switch tanEnterRoomResp.ErrorCode {
+		case packet.TanEnterRoomNotFound:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Target room (%d) is closed", roomID)
+		case packet.TanEnterRoomWrongPasscode:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Provided room passcode is incorrect")
+		case packet.TanEnterRoomFullOfPeople:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Target room (%d) is full of people", roomID)
+		default:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Enter room failed due to unknown reason (code = %d)", tanEnterRoomResp.ErrorCode)
+		}
 	}
 
-	// Find final raknet server
-	for _, address := range possibleRaknetServers {
-		// Create conn
-		conn, enc, dec, success := d.raknetDialer(context.Background(), address, tanLobbyLoginResp)
-		if !success {
-			continue
-		}
-
-		// Enter room
-		err := d.writeRaknetPacket(enc, &packet.TanEnterRoomRequest{
-			OwnerID:               tanLobbyLoginResp.RoomOwnerID,
-			RoomID:                uint32(roomID),
-			EnterPassword:         d.Authenticator.GetRoomPasscode(),
-			EnterTeamID:           0,
-			EnterToken:            0,
-			FollowTeamID:          0,
-			NetherNetID:           fmt.Sprintf("%d", d.clientNetherID),
-			SupportWebRTCCompress: true,
-		})
-		if err != nil {
-			_ = conn.Close()
-			continue
-		}
-
-		// Handle enter room response
-		pk, err := d.readRaknetPacket(dec)
-		if err != nil {
-			_ = conn.Close()
-			continue
-		}
-		tanEnterRoomResp, ok := pk.(*packet.TanEnterRoomResponse)
-		if !ok {
-			_ = conn.Close()
-			continue
-		}
-		if tanEnterRoomResp.ErrorCode != packet.TanEnterRoomSuccess {
-			switch tanEnterRoomResp.ErrorCode {
-			case packet.TanEnterRoomWrongPasscode:
-				return nil, "", true, false, false
-			case packet.TanEnterRoomFullOfPeople:
-				return nil, "", false, true, false
-			}
-			_ = conn.Close()
-			continue
-		}
-
-		// Handle ready or kick out packet
+	// Read incoming packet
+	pkChannel := make(chan packet.Packet, 1)
+	go func() {
 		pk, err = d.readRaknetPacket(dec)
 		if err != nil {
-			_ = conn.Close()
-			continue
+			return
 		}
-		switch pk.(type) {
-		case *packet.TanNotifyServerReady, *packet.TanKickOutResponse:
-			_ = conn.Close()
-			return pk, address, false, false, true
+		pkChannel <- pk
+	}()
+
+	// Handle incoming packet
+	select {
+	case <-ctx.Done():
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", ctx.Err())
+	case pk := <-pkChannel:
+		switch p := pk.(type) {
+		case *packet.TanNotifyServerReady:
+			remoteNetherNetID, err = strconv.ParseUint(p.NetherNetID, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
+			}
+			return remoteNetherNetID, nil
+		case *packet.TanKickOutResponse:
+			return 0, fmt.Errorf("enterTanLobbyRoom: The host owner kick you from the room")
 		default:
-			_ = conn.Close()
+			return 0, fmt.Errorf("enterTanLobbyRoom: Unknown packet received; pk = %#v", pk)
 		}
 	}
-
-	// Return unsuccessful
-	return nil, "", false, false, false
 }
 
 // Dial ..
-func (d *Dialer) Dial() (conn net.Conn, err error) {
-	var raknetAddress string
-	var websocketAddress string
-	var remoteNetherNetID uint64
-
+func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, err error) {
 	// First we query room info
 	tanLobbyLoginResp, err := d.Authenticator.GetAccess()
 	if err != nil {
 		return nil, nil
 	}
 	if !tanLobbyLoginResp.Success {
-		return nil, fmt.Errorf("Dial: %v", tanLobbyLoginResp.ErrorInfo)
+		return nil, fmt.Errorf("DialContext: %v", tanLobbyLoginResp.ErrorInfo)
 	}
 
-	// Then get transfer server list
-	tanLobbyTransferServersResp, err := d.Authenticator.TransferServerList()
+	// Then Enter tan lobby room
+	remoteNetherNetID, err := d.enterTanLobbyRoom(ctx, tanLobbyLoginResp)
 	if err != nil {
-		return nil, nil
-	}
-	if !tanLobbyTransferServersResp.Success {
-		return nil, fmt.Errorf("Dial: %v", tanLobbyTransferServersResp.ErrorInfo)
+		return nil, fmt.Errorf("DialContext: %v", err)
 	}
 
-	// Enter tan lobby room
-	for range DefaultRaknetServerRepeatTimes {
-		pk, addr, wrongPasscode, roomFullOfPeople, success := d.enterTanLobbyRoom(tanLobbyLoginResp, tanLobbyTransferServersResp)
-		if wrongPasscode {
-			return nil, fmt.Errorf("Dial: Provided room passcode is incorrect")
-		}
-		if roomFullOfPeople {
-			return nil, fmt.Errorf("Dial: Target room is full of people")
-		}
-		if !success {
-			continue
-		}
-
-		switch p := pk.(type) {
-		case *packet.TanNotifyServerReady:
-			remoteNetherNetID, _ = strconv.ParseUint(p.NetherNetID, 10, 64)
-		case *packet.TanKickOutResponse:
-			return nil, fmt.Errorf("Dial: The host owner kick you from the room")
-		}
-
-		raknetAddress = addr
-		break
-	}
-	if len(raknetAddress) == 0 {
-		return nil, fmt.Errorf("Dial: No available raknet server was found")
-	}
-
-	// Find websocket server address
-	websocketServerIP := strings.Split(raknetAddress, ":")[0]
-	for _, value := range tanLobbyTransferServersResp.WebsocketServers {
-		if strings.Contains(value, websocketServerIP) {
-			websocketAddress = value
-			break
-		}
-	}
-	if len(websocketAddress) == 0 {
-		return nil, fmt.Errorf("Dial: No available websocket server was found")
-	}
-
-	// Connect to websocket server
-	wsCTX, wsCTXCancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer wsCTXCancel()
+	// Connect to websocket signaling server
 	wsConn, err := signaling.Dialer{
 		NetworkID: d.clientNetherID,
 	}.DialContext(
-		wsCTX,
-		websocketAddress,
+		ctx,
+		tanLobbyLoginResp.SignalingServerAddress,
 		d.clientNetherID,
 		tanLobbyLoginResp.UserUniqueID,
 		tanLobbyLoginResp.SignalingSeed,
 		tanLobbyLoginResp.SignalingTicket,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Dial: %v", err)
+		return nil, fmt.Errorf("DialContext: %v", err)
 	}
 	defer wsConn.Close()
 
-	// Connect to remote room
-	mcCTX, mcCTXCancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer mcCTXCancel()
+	// At last we can connect to remote room
 	conn, err = nethernet.Dialer{}.DialContext(
-		mcCTX,
+		ctx,
 		remoteNetherNetID,
 		wsConn,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Dial: %v", err)
+		return nil, fmt.Errorf("DialContext: %v", err)
 	}
 
 	// Return

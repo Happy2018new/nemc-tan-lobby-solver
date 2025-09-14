@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"math"
 	"math/rand/v2"
 	"net"
 	"strconv"
@@ -130,7 +129,7 @@ func (d *Dialer) enterTanLobbyRoom(
 	if err != nil {
 		return nil, "", false, false, false
 	}
-	d.clientNetherID = rand.Uint64N(math.MaxUint64)
+	d.clientNetherID = rand.Uint64()
 
 	// Get available raknet server
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultRaknetServerCollectTimes)

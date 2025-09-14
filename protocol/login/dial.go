@@ -174,7 +174,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 }
 
-// Dial ..
+// DialContext ..
 func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, err error) {
 	// First we query room info
 	tanLobbyLoginResp, err := d.Authenticator.GetAccess()

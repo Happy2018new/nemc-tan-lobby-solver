@@ -6,6 +6,13 @@ import (
 	"fmt"
 )
 
+// PhoenixSkinInfo ..
+type PhoenixSkinInfo struct {
+	ItemID          string `json:"entity_id"`
+	SkinDownloadURL string `json:"res_url"`
+	SkinIsSlim      bool   `json:"is_slim"`
+}
+
 // TanLobbyLoginRequest ..
 type TanLobbyLoginRequest struct {
 	FBToken string `json:"login_token"`
@@ -17,12 +24,16 @@ type TanLobbyLoginResponse struct {
 	Success   bool   `json:"success"`
 	ErrorInfo string `json:"error_info"`
 
+	UserUniqueID   uint32          `json:"user_unique_id"`
+	UserPlayerName string          `json:"user_player_name"`
+	BotLevel       int             `json:"growth_level"`
+	BotSkin        PhoenixSkinInfo `json:"skin_info"`
+	BotComponent   map[string]*int `json:"outfit_info,omitempty"`
+
 	RoomOwnerID        uint32   `json:"room_owner_id"`
+	RoomModDisplayName []string `json:"room_mod_display_name"`
 	RoomModDownloadURL []string `json:"room_mod_download_url"`
 	RoomModEncryptKey  [][]byte `json:"room_mod_encrypt_key"`
-
-	UserUniqueID   uint32 `json:"user_unique_id"`
-	UserPlayerName string `json:"user_player_name"`
 
 	RaknetServerAddress string `json:"raknet_server_address"`
 	RaknetRand          []byte `json:"raknet_rand"`

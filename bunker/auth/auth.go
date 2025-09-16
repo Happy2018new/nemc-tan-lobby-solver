@@ -17,7 +17,10 @@ type TanLobbyLoginResponse struct {
 	Success   bool   `json:"success"`
 	ErrorInfo string `json:"error_info"`
 
-	RoomOwnerID    uint32 `json:"room_owner_id"`
+	RoomOwnerID        uint32   `json:"room_owner_id"`
+	RoomModDownloadURL []string `json:"room_mod_download_url"`
+	RoomModEncryptKey  [][]byte `json:"room_mod_encrypt_key"`
+
 	UserUniqueID   uint32 `json:"user_unique_id"`
 	UserPlayerName string `json:"user_player_name"`
 

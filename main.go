@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
@@ -19,10 +20,12 @@ func main() {
 	}
 
 	wrapper := auth.NewAccessWrapper(client, "ROOM ID", "", "YOUR FB TOKEN")
-	netConn, err := login.Dial(wrapper)
+	netConn, tanLobbyLoginResp, err := login.Dial(wrapper)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("[INFO] Tan lobby login response: %#v\n", tanLobbyLoginResp)
+
 	serverConn, err := minecraft.DialContext(context.Background(), netConn)
 	if err != nil {
 		panic(err)
@@ -32,12 +35,13 @@ func main() {
 	listenConfig := minecraft.ListenConfig{
 		AuthenticationDisabled: true,
 	}
-	listener, err := listenConfig.Listen("raknet", "127.0.0.1:19132")
+	listener, err := listenConfig.Listen("raknet", ":19132")
 	if err != nil {
 		panic(err)
 	}
 	defer listener.Close()
 
+	fmt.Println("[INFO] Server starting on 127.0.0.1:19132")
 	c, err := listener.Accept()
 	if err != nil {
 		panic(err)

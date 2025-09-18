@@ -188,7 +188,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 		for {
 			pk, err := readRaknetPacket(dec)
 			if err != nil {
-				_ = l.raknetConnection.Close()
+				l.CloseRoom()
 				return
 			}
 			if _, ok := pk.(*packet.TanNewGuestResponse); !ok {

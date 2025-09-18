@@ -10,13 +10,20 @@ type AccessWrapper struct {
 	Client       *Client
 }
 
-// NewAccessWrapper ..
-func NewAccessWrapper(client *Client, roomID string, roomPasscode string, token string) *AccessWrapper {
+// NewClientAccessWrapper ..
+func NewClientAccessWrapper(client *Client, roomID string, roomPasscode string, token string) *AccessWrapper {
 	return &AccessWrapper{
 		RoomID:       roomID,
 		RoomPasscode: roomPasscode,
 		Token:        token,
 		Client:       client,
+	}
+}
+
+func NewServerAccessWrapper(client *Client, token string) *AccessWrapper {
+	return &AccessWrapper{
+		Client: client,
+		Token:  token,
 	}
 }
 
@@ -37,4 +44,13 @@ func (aw *AccessWrapper) GetAccess() (TanLobbyLoginResponse, error) {
 		return TanLobbyLoginResponse{}, fmt.Errorf("GetAccess: %v", err)
 	}
 	return tanLobbyLoginResp, nil
+}
+
+// GetCreate ..
+func (aw *AccessWrapper) GetCreate() (TanLobbyCreateResponse, error) {
+	tanLobbyCreateResp, err := aw.Client.TanLobbyCreate(aw.Token)
+	if err != nil {
+		return TanLobbyCreateResponse{}, fmt.Errorf("GetAccess: %v", err)
+	}
+	return tanLobbyCreateResp, nil
 }

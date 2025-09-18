@@ -1,4 +1,4 @@
-package login
+package service
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 )
 
 // readRaknetPacket ..
-func (d *Dialer) readRaknetPacket(decoder *packet.Decoder) (pk packet.Packet, err error) {
+func readRaknetPacket(decoder *packet.Decoder) (pk packet.Packet, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("readRaknetPacket: %v", r)
@@ -40,7 +40,7 @@ func (d *Dialer) readRaknetPacket(decoder *packet.Decoder) (pk packet.Packet, er
 }
 
 // writeRaknetPacket ..
-func (d *Dialer) writeRaknetPacket(encoder *packet.Encoder, pk packet.Packet) error {
+func writeRaknetPacket(encoder *packet.Encoder, pk packet.Packet) error {
 	if pk == nil {
 		return nil
 	}

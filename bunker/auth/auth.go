@@ -73,3 +73,54 @@ func (client *Client) Auth(roomID string, fbtoken string) (TanLobbyLoginResponse
 	// Return
 	return tanLobbyLoginResp, nil
 }
+
+// TanLobbyCreateRequest ..
+type TanLobbyCreateRequest struct {
+	FBToken string `json:"login_token"`
+}
+
+// TanLobbyCreateResponse ..
+type TanLobbyCreateResponse struct {
+	Success   bool   `json:"success"`
+	ErrorInfo string `json:"error_info"`
+
+	UserUniqueID   uint32 `json:"user_unique_id"`
+	UserPlayerName string `json:"user_player_name"`
+
+	RaknetServerAddress string `json:"raknet_server_address"`
+	RaknetRand          []byte `json:"raknet_rand"`
+	RaknetAESRand       []byte `json:"raknet_aes_rand"`
+	EncryptKeyBytes     []byte `json:"encrypt_key_bytes"`
+	DecryptKeyBytes     []byte `json:"decrypt_key_bytes"`
+
+	SignalingServerAddress string `json:"signaling_server_address"`
+	SignalingSeed          []byte `json:"signaling_seed"`
+	SignalingTicket        []byte `json:"signaling_ticket"`
+}
+
+func (client *Client) TanLobbyCreate(fbtoken string) (TanLobbyCreateResponse, error) {
+	// Pack request
+	request := TanLobbyCreateRequest{
+		FBToken: fbtoken,
+	}
+	requestJsonBytes, _ := json.Marshal(request)
+
+	// Post request
+	resp, err := client.client.Post(
+		fmt.Sprintf("%s/api/phoenix/tan_lobby_create", client.AuthServer),
+		"application/json",
+		bytes.NewBuffer(requestJsonBytes),
+	)
+	if err != nil {
+		return TanLobbyCreateResponse{}, fmt.Errorf("TanLobbyCreate: %v", err)
+	}
+
+	// Parse response
+	tanLobbyCreateResp, err := assertAndParse[TanLobbyCreateResponse](resp)
+	if err != nil {
+		return TanLobbyCreateResponse{}, fmt.Errorf("TanLobbyCreate: %v", err)
+	}
+
+	// Return
+	return tanLobbyCreateResp, nil
+}

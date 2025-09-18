@@ -12,6 +12,7 @@ func NewClientPool() Pool {
 		IDTanEnterRoomRequest:  &TanEnterRoomRequest{},
 		IDTanLeaveRoomRequest:  &TanLeaveRoomRequest{},
 		IDTanKickOutRequest:    &TanKickOutRequest{},
+		IDTanNotifyServerReady: &TanNotifyServerReady{},
 	}
 }
 
@@ -22,6 +23,7 @@ func NewServerPool() Pool {
 		IDTanLoginResponse:      &TanLoginResponse{},
 		IDTanCreateRoomResponse: &TanCreateRoomResponse{},
 		IDTanEnterRoomResponse:  &TanEnterRoomResponse{},
+		IDTanNewGuestResponse:   &TanNewGuestResponse{},
 		IDTanLeaveRoomResponse:  &TanLeaveRoomResponse{},
 		IDTanKickOutResponse:    &TanKickOutResponse{},
 		IDTanNotifyServerReady:  &TanNotifyServerReady{},

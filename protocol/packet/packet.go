@@ -11,6 +11,7 @@ import (
 const (
 	BoundTypeServer uint8 = iota
 	BoundTypeClient
+	BoundTypeBoth
 )
 
 // Packet represents a packet that may be sent over a Minecraft network connection.
@@ -26,7 +27,8 @@ type Packet interface {
 	ID() uint16
 	// BoundType returns the bound type of the packet.
 	// If return 0 (BoundTypeServer), it means this packet is send from client to server.
-	// Otherwise (1; BoundTypeClient) this packet is send from server to client.
+	// If return 1 (BoundTypeClient), then this packet is send from server to client.
+	// If return 2 (BoundTypeBoth), then this packet can both send from server or client.
 	BoundType() uint8
 	// Marshal encodes or decodes a Packet, depending on the encoding.IO
 	// implementation passed. When passing a encoding.Writer, Marshal will

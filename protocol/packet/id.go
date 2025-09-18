@@ -30,7 +30,7 @@ const (
 	IDTanCreateRoomResponse
 	_
 	IDTanEnterRoomResponse
-	IDTanNewGuestResponse // TODO
+	IDTanNewGuestResponse
 	IDTanLeaveRoomResponse
 	IDTanKickOutResponse
 	IDTanNotifyServerReady

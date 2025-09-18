@@ -16,7 +16,7 @@ func (*TanNotifyServerReady) ID() uint16 {
 }
 
 func (*TanNotifyServerReady) BoundType() uint8 {
-	return BoundTypeClient
+	return BoundTypeBoth
 }
 
 func (t *TanNotifyServerReady) Marshal(io encoding.IO) {

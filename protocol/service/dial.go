@@ -1,4 +1,4 @@
-package login
+package service
 
 import (
 	"context"
@@ -12,16 +12,9 @@ import (
 	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/nethernet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
-	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/login/signaling"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/packet"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/service/signaling"
 )
-
-// Authenticator ..
-type Authenticator interface {
-	GetRoomID() string
-	GetRoomPasscode() string
-	GetAccess() (auth.TanLobbyLoginResponse, error)
-}
 
 // Dialer ..
 type Dialer struct {
@@ -79,7 +72,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 
 	// Send login request
-	err = d.writeRaknetPacket(enc, &packet.TanLoginRequest{
+	err = writeRaknetPacket(enc, &packet.TanLoginRequest{
 		PlayerID:   tanLobbyLoginResp.UserUniqueID,
 		Rand:       tanLobbyLoginResp.RaknetRand,
 		AESRand:    tanLobbyLoginResp.RaknetAESRand,
@@ -90,7 +83,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 
 	// Handle login response
-	pk, err := d.readRaknetPacket(dec)
+	pk, err := readRaknetPacket(dec)
 	if err != nil {
 		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
@@ -107,7 +100,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	dec.EnableEncryption(tanLobbyLoginResp.EncryptKeyBytes, tanLobbyLoginResp.DecryptKeyBytes)
 
 	// Enter room
-	err = d.writeRaknetPacket(enc, &packet.TanEnterRoomRequest{
+	err = writeRaknetPacket(enc, &packet.TanEnterRoomRequest{
 		OwnerID:               tanLobbyLoginResp.RoomOwnerID,
 		RoomID:                uint32(roomID),
 		EnterPassword:         d.Authenticator.GetRoomPasscode(),
@@ -122,7 +115,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 
 	// Handle enter room response
-	pk, err = d.readRaknetPacket(dec)
+	pk, err = readRaknetPacket(dec)
 	if err != nil {
 		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
@@ -146,7 +139,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	// Read incoming packet
 	pkChannel := make(chan packet.Packet, 1)
 	go func() {
-		pk, err = d.readRaknetPacket(dec)
+		pk, err = readRaknetPacket(dec)
 		if err != nil {
 			return
 		}
@@ -178,7 +171,7 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.
 	// First we query room info
 	tanLobbyLoginResp, err := d.Authenticator.GetAccess()
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, nil
+		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
 	if !tanLobbyLoginResp.Success {
 		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", tanLobbyLoginResp.ErrorInfo)

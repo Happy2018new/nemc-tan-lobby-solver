@@ -69,23 +69,17 @@ func (l *ListenConfig) createTanLobbyRoom(
 	roomID uint32,
 	err error,
 ) {
-	var success bool
-
 	// Create conn
 	conn, err = raknet.DialContext(ctx, tanLobbyCreateResp.RaknetServerAddress)
 	if err != nil {
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
-	defer func() {
-		if !success {
-			_ = conn.Close()
-		}
-	}()
 
 	// Set encoder and decoder
 	enc = packet.NewEncoder(conn)
 	dec, err = packet.NewDecoder(conn)
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 
@@ -97,19 +91,23 @@ func (l *ListenConfig) createTanLobbyRoom(
 		PlayerName: tanLobbyCreateResp.UserPlayerName,
 	})
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 
 	// Handle login response
 	pk, err := readRaknetPacket(dec)
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 	tanLoginResp, ok := pk.(*packet.TanLoginResponse)
 	if !ok {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanLoginResponse, but got %#v", pk)
 	}
 	if tanLoginResp.ErrorCode != packet.TanLoginSuccess {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Login failed (code = %d)", tanLoginResp.ErrorCode)
 	}
 
@@ -142,24 +140,27 @@ func (l *ListenConfig) createTanLobbyRoom(
 		PerfLv:       0x1,
 	})
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 
 	// Handle enter room response
 	pk, err = readRaknetPacket(dec)
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 	tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
 	if !ok {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
 	}
 	if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
+		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
 	}
 
 	// Return
-	success = true
 	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
 }
 

@@ -1,5 +1,6 @@
 package packet
 
+// Client -> Server
 const (
 	IDTanLoginRequest uint16 = iota
 	IDTanCreateRoomRequest
@@ -25,6 +26,7 @@ const (
 	IDTanUpdateRoomPerformance        // TODO
 )
 
+// Server -> Client
 const (
 	IDTanLoginResponse uint16 = iota
 	IDTanCreateRoomResponse
@@ -33,7 +35,7 @@ const (
 	IDTanNewGuestResponse
 	IDTanLeaveRoomResponse
 	IDTanKickOutResponse
-	IDTanNotifyServerReady
+	_
 	_
 	_
 	_
@@ -48,3 +50,6 @@ const (
 	_
 	IDTanSetRoomDisplayModListResponse // TODO
 )
+
+// Client <-> Server
+const IDTanNotifyServerReady uint16 = 7

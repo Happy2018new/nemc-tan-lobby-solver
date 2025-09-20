@@ -2,6 +2,25 @@ package packet
 
 import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
+// BuiltInRoomName ..
+var BuiltInRoomName = []string{
+	"来和我一起玩吧！",
+	"一起玩生存",
+	"一起做建筑",
+	"自由创造",
+	"探索冒险",
+	"动作游戏爱好者",
+	"精美建筑欣赏",
+	"交个新朋友",
+	"寻找通关搭档",
+	"寻找跑酷达人",
+	"来和我PK吧",
+	"有人来挑战我吗？",
+	"来一场速度比拼！",
+	"轻松休闲，快乐游戏",
+	"一起聊聊天吧",
+}
+
 // TanCreateRoomRequest ..
 type TanCreateRoomRequest struct {
 	Capacity     uint8

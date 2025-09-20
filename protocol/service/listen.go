@@ -213,7 +213,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 	}()
 
 	// Connect to websocket signaling server
-	wsConn, err := signaling.Dialer{
+	wsConnection, err := signaling.Dialer{
 		NetworkID: l.serverNetherID,
 	}.DialContext(
 		ctx,
@@ -229,10 +229,10 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 	}
 
 	// Create listener
-	l.netherNetListener, err = nethernet.ListenConfig{}.Listen(wsConn)
+	l.netherNetListener, err = nethernet.ListenConfig{}.Listen(wsConnection)
 	if err != nil {
 		_ = l.raknetConnection.Close()
-		_ = wsConn.Close()
+		_ = wsConnection.Close()
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
 	return l.netherNetListener, roomID, nil

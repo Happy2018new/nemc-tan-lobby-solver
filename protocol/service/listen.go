@@ -224,12 +224,14 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 		tanLobbyCreateResp.SignalingTicket,
 	)
 	if err != nil {
+		_ = l.raknetConnection.Close()
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
 
 	// Create listener
 	l.netherNetListener, err = nethernet.ListenConfig{}.Listen(wsConn)
 	if err != nil {
+		_ = l.raknetConnection.Close()
 		_ = wsConn.Close()
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}

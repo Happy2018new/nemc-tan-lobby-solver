@@ -2,7 +2,10 @@ package packet
 
 import "github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
 
-const TanCreateRoomSuccess int8 = iota
+const (
+	TanCreateRoomSuccess              int8 = iota
+	TanCreateRoomNeedVipToSetRoomName int8 = 7
+)
 
 // TanCreateRoomResponse ..
 type TanCreateRoomResponse struct {

@@ -240,6 +240,10 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 
 // CloseRoom ..
 func (l *ListenConfig) CloseRoom() {
-	_ = l.raknetConnection.Close()
-	_ = l.netherNetListener.Close()
+	if l.raknetConnection != nil {
+		_ = l.raknetConnection.Close()
+	}
+	if l.netherNetListener != nil {
+		_ = l.netherNetListener.Close()
+	}
 }

@@ -1,6 +1,8 @@
 package raknet_test
 
-import "github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
+import (
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
+)
 
 func ExampleListen() {
 	const address = ":19132"

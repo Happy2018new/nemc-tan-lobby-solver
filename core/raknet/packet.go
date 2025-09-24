@@ -3,51 +3,61 @@ package raknet
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
-	"sort"
+	"errors"
+	"io"
 )
 
 const (
-	// bitFlagDatagram is set for every valid datagram. It is used to identify packets that are datagrams.
+	// bitFlagDatagram is set for every valid datagram. It is used to identify
+	// packets that are datagrams.
 	bitFlagDatagram = 0x80
 	// bitFlagACK is set for every ACK packet.
 	bitFlagACK = 0x40
 	// bitFlagNACK is set for every NACK packet.
 	bitFlagNACK = 0x20
+	// bitFlagNeedsBAndAS is set for every datagram with packet data, but is not
+	// actually used.
+	bitFlagNeedsBAndAS = 0x04
 )
 
 // noinspection GoUnusedConst
 const (
-	// reliabilityUnreliable means that the packet sent could arrive out of order, be duplicated, or just not
-	// arrive at all. It is usually used for high frequency packets of which the order does not matter.
-	//lint:ignore U1000 While this constant is unused, it is here for the sake of having all reliabilities.
+	// reliabilityUnreliable means that the packet sent could arrive out of
+	// order, be duplicated, or just not arrive at all. It is usually used for
+	// high frequency packets of which the order does not matter.
+	//lint:ignore U1000 While this constant is unused, it is here for the sake
+	// of having all reliabilities documented.
 	reliabilityUnreliable byte = iota
-	// reliabilityUnreliableSequenced means that the packet sent could be duplicated or not arrive at all, but
-	// ensures that it is always handled in the right order.
+	// reliabilityUnreliableSequenced means that the packet sent could be
+	// duplicated or not arrive at all, but ensures that it is always handled in
+	// the right order.
 	reliabilityUnreliableSequenced
-	// reliabilityReliable means that the packet sent could not arrive, or arrive out of order, but ensures
-	// that the packet is not duplicated.
+	// reliabilityReliable means that the packet sent could not arrive, or
+	// arrive out of order, but ensures that the packet is not duplicated.
 	reliabilityReliable
-	// reliabilityReliableOrdered means that every packet sent arrives, arrives in the right order and is not
-	// duplicated.
+	// reliabilityReliableOrdered means that every packet sent arrives, arrives
+	// in the right order and is not duplicated.
 	reliabilityReliableOrdered
-	// reliabilityReliableSequenced means that the packet sent could not arrive, but ensures that the packet
-	// will be in the right order and not be duplicated.
+	// reliabilityReliableSequenced means that the packet sent could not arrive,
+	// but ensures that the packet will be in the right order and not be
+	// duplicated.
 	reliabilityReliableSequenced
 
-	// splitFlag is set in the header if the packet was split. If so, the encapsulation contains additional
-	// data about the fragment.
+	// splitFlag is set in the header if the packet was split. If so, the
+	// encapsulation contains additional data about the fragment.
 	splitFlag = 0x10
 )
 
-// packet is an encapsulation around every packet sent after the connection is established. It is
+// packet is an encapsulation around every packet sent after the connection is
+// established.
 type packet struct {
 	reliability byte
 
-	content       []byte
 	messageIndex  uint24
 	sequenceIndex uint24
 	orderIndex    uint24
+
+	content []byte
 
 	split      bool
 	splitCount uint32
@@ -56,257 +66,157 @@ type packet struct {
 }
 
 // write writes the packet and its content to the buffer passed.
-func (packet *packet) write(b *bytes.Buffer) {
-	header := packet.reliability << 5
-	if packet.split {
+func (pk *packet) write(buf *bytes.Buffer) {
+	header := pk.reliability << 5
+	if pk.split {
 		header |= splitFlag
 	}
-	b.WriteByte(header)
-	_ = binary.Write(b, binary.BigEndian, uint16(len(packet.content))<<3)
-	if packet.reliable() {
-		writeUint24(b, packet.messageIndex)
+
+	buf.WriteByte(header)
+	writeUint16(buf, uint16(len(pk.content))<<3)
+	if pk.reliable() {
+		writeUint24(buf, pk.messageIndex)
 	}
-	if packet.sequenced() {
-		writeUint24(b, packet.sequenceIndex)
+	if pk.sequenced() {
+		writeUint24(buf, pk.sequenceIndex)
 	}
-	if packet.sequencedOrOrdered() {
-		writeUint24(b, packet.orderIndex)
+	if pk.sequencedOrOrdered() {
+		writeUint24(buf, pk.orderIndex)
 		// Order channel, we don't care about this.
-		b.WriteByte(0)
+		buf.WriteByte(0)
 	}
-	if packet.split {
-		_ = binary.Write(b, binary.BigEndian, packet.splitCount)
-		_ = binary.Write(b, binary.BigEndian, packet.splitID)
-		_ = binary.Write(b, binary.BigEndian, packet.splitIndex)
+	if pk.split {
+		writeUint32(buf, pk.splitCount)
+		writeUint16(buf, pk.splitID)
+		writeUint32(buf, pk.splitIndex)
 	}
-	b.Write(packet.content)
+	buf.Write(pk.content)
 }
 
 // read reads a packet and its content from the buffer passed.
-func (packet *packet) read(b *bytes.Buffer) error {
-	header, err := b.ReadByte()
-	if err != nil {
-		return fmt.Errorf("error reading packet header: %v", err)
+func (pk *packet) read(b []byte) (int, error) {
+	if len(b) < 3 {
+		return 0, io.ErrUnexpectedEOF
 	}
-	packet.split = (header & splitFlag) != 0
-	packet.reliability = (header & 224) >> 5
-	var packetLength uint16
-	if err := binary.Read(b, binary.BigEndian, &packetLength); err != nil {
-		return fmt.Errorf("error reading packet length: %v", err)
+	header := b[0]
+	pk.split = (header & splitFlag) != 0
+	pk.reliability = (header & 224) >> 5
+
+	n := binary.BigEndian.Uint16(b[1:]) >> 3
+	if n == 0 {
+		return 0, errors.New("invalid packet length: cannot be 0")
 	}
-	packetLength >>= 3
-	if packetLength == 0 {
-		return fmt.Errorf("invalid packet length: cannot be 0")
+	offset := 3
+
+	if pk.reliable() {
+		if len(b)-offset < 3 {
+			return 0, io.ErrUnexpectedEOF
+		}
+		pk.messageIndex = loadUint24(b[offset:])
+		offset += 3
 	}
 
-	if packet.reliable() {
-		packet.messageIndex, err = readUint24(b)
-		if err != nil {
-			return fmt.Errorf("error reading packet message index: %v", err)
+	if pk.sequenced() {
+		if len(b)-offset < 3 {
+			return 0, io.ErrUnexpectedEOF
 		}
+		pk.sequenceIndex = loadUint24(b[offset:])
+		offset += 3
 	}
 
-	if packet.sequenced() {
-		packet.sequenceIndex, err = readUint24(b)
-		if err != nil {
-			return fmt.Errorf("error reading packet sequence index: %v", err)
+	if pk.sequencedOrOrdered() {
+		if len(b)-offset < 4 {
+			return 0, io.ErrUnexpectedEOF
 		}
+		pk.orderIndex = loadUint24(b[offset:])
+		// Order channel (byte)
+		offset += 4
 	}
 
-	if packet.sequencedOrOrdered() {
-		packet.orderIndex, err = readUint24(b)
-		if err != nil {
-			return fmt.Errorf("error reading packet order index: %v", err)
+	if pk.split {
+		if len(b)-offset < 10 {
+			return 0, io.ErrUnexpectedEOF
 		}
-		// Order channel (byte), we don't care about this.
-		b.Next(1)
+		pk.splitCount = binary.BigEndian.Uint32(b[offset:])
+		pk.splitID = binary.BigEndian.Uint16(b[offset+4:])
+		pk.splitIndex = binary.BigEndian.Uint32(b[offset+6:])
+		offset += 10
 	}
 
-	if packet.split {
-		if err := binary.Read(b, binary.BigEndian, &packet.splitCount); err != nil {
-			return fmt.Errorf("error reading packet split count: %v", err)
-		}
-		if err := binary.Read(b, binary.BigEndian, &packet.splitID); err != nil {
-			return fmt.Errorf("error reading packet split ID: %v", err)
-		}
-		if err := binary.Read(b, binary.BigEndian, &packet.splitIndex); err != nil {
-			return fmt.Errorf("error reading packet split index: %v", err)
-		}
+	pk.content = make([]byte, n)
+	if got := copy(pk.content, b[offset:]); got != int(n) {
+		return 0, io.ErrUnexpectedEOF
 	}
-
-	packet.content = make([]byte, packetLength)
-	if n, err := b.Read(packet.content); err != nil || n != int(packetLength) {
-		return fmt.Errorf("not enough data in packet: %v bytes read but need %v", n, packetLength)
-	}
-	return nil
+	return offset + int(n), nil
 }
 
-func (packet *packet) reliable() bool {
-	switch packet.reliability {
+func (pk *packet) reliable() bool {
+	switch pk.reliability {
 	case reliabilityReliable,
 		reliabilityReliableOrdered,
 		reliabilityReliableSequenced:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
-func (packet *packet) sequencedOrOrdered() bool {
-	switch packet.reliability {
+func (pk *packet) sequencedOrOrdered() bool {
+	switch pk.reliability {
 	case reliabilityUnreliableSequenced,
 		reliabilityReliableOrdered,
 		reliabilityReliableSequenced:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
-func (packet *packet) sequenced() bool {
-	switch packet.reliability {
+func (pk *packet) sequenced() bool {
+	switch pk.reliability {
 	case reliabilityUnreliableSequenced,
 		reliabilityReliableSequenced:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 const (
-	// packetRange indicates a range of packets, followed by the first and the last packet in the range.
-	packetRange = iota
-	// packetSingle indicates a single packet, followed by its sequence number.
-	packetSingle
+	// Datagram header +
+	// Datagram sequence number +
+	// Packet header +
+	// Packet content length +
+	// Packet message index +
+	// Packet order index +
+	// Packet order channel
+	packetAdditionalSize = 1 + 3 + 1 + 2 + 3 + 3 + 1
+	// Packet split count +
+	// Packet split ID +
+	// Packet split index
+	splitAdditionalSize = 4 + 2 + 4
 )
 
-// acknowledgement is an acknowledgement packet that may either be an ACK or a NACK, depending on the purpose
-// that it is sent with.
-type acknowledgement struct {
-	packets []uint24
-}
+// split splits a content buffer in smaller buffers so that they do not exceed
+// the MTU size that the connection holds.
+func split(b []byte, mtu uint16) [][]byte {
+	n := len(b)
+	maxSize := int(mtu - packetAdditionalSize)
 
-// write encodes an acknowledgement packet and returns an error if not successful.
-func (ack *acknowledgement) write(b *bytes.Buffer, mtu uint16) (n int, err error) {
-	packets := ack.packets
-	if len(packets) == 0 {
-		return 0, binary.Write(b, binary.BigEndian, int16(0))
+	if n > maxSize {
+		// If the content size is bigger than the maximum size here, it means
+		// the packet will get split. This means that the packet will get even
+		// bigger because a split packet uses 4 + 2 + 4 more bytes.
+		maxSize -= splitAdditionalSize
 	}
-	buffer := bytes.NewBuffer(nil)
-	// Sort packets before encoding to ensure packets are encoded correctly.
-	sort.Slice(packets, func(i, j int) bool {
-		return packets[i] < packets[j]
-	})
-
-	var firstPacketInRange uint24
-	var lastPacketInRange uint24
-	var recordCount int16
-
-	for index, packet := range packets {
-		if buffer.Len() >= int(mtu-10) {
-			// We must make sure the final packet length doesn't exceed the MTU size.
-			break
-		}
-		n++
-		if index == 0 {
-			// The first packet, set the first and last packet to it.
-			firstPacketInRange = packet
-			lastPacketInRange = packet
-			continue
-		}
-		if packet == lastPacketInRange+1 {
-			// Packet is still part of the current range, as it's sequenced properly with the last packet.
-			// Set the last packet in range to the packet and continue to the next packet.
-			lastPacketInRange = packet
-			continue
-		} else {
-			// We got to the end of a range/single packet. We need to write those down now.
-			if firstPacketInRange == lastPacketInRange {
-				// First packet equals last packet, so we have a single packet record. Write down the packet,
-				// and set the first and last packet to the current packet.
-				if err := buffer.WriteByte(packetSingle); err != nil {
-					return 0, err
-				}
-				writeUint24(buffer, firstPacketInRange)
-
-				firstPacketInRange = packet
-				lastPacketInRange = packet
-			} else {
-				// There's a gap between the first and last packet, so we have a range of packets. Write the
-				// first and last packet of the range and set both to the current packet.
-				if err := buffer.WriteByte(packetRange); err != nil {
-					return 0, err
-				}
-				writeUint24(buffer, firstPacketInRange)
-				writeUint24(buffer, lastPacketInRange)
-
-				firstPacketInRange = packet
-				lastPacketInRange = packet
-			}
-			// Keep track of the amount of records as we need to write that first.
-			recordCount++
-		}
+	// If the content length can't be divided by maxSize perfectly, we need
+	// to reserve another fragment for the last bit of the packet.
+	fragmentCount := n/maxSize + min(n%maxSize, 1)
+	fragments := make([][]byte, fragmentCount)
+	for i := range fragmentCount - 1 {
+		fragments[i] = b[:maxSize]
+		b = b[maxSize:]
 	}
-
-	// Make sure the last single packet/range is written, as we always need to know one packet ahead to know
-	// how we should write the current.
-	if firstPacketInRange == lastPacketInRange {
-		if err := buffer.WriteByte(packetSingle); err != nil {
-			return 0, err
-		}
-		writeUint24(buffer, firstPacketInRange)
-	} else {
-		if err := buffer.WriteByte(packetRange); err != nil {
-			return 0, err
-		}
-		writeUint24(buffer, firstPacketInRange)
-		writeUint24(buffer, lastPacketInRange)
-	}
-	recordCount++
-	if err := binary.Write(b, binary.BigEndian, recordCount); err != nil {
-		return 0, err
-	}
-	if _, err := b.Write(buffer.Bytes()); err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
-// read decodes an acknowledgement packet and returns an error if not successful.
-func (ack *acknowledgement) read(b *bytes.Buffer) error {
-	const maxAcknowledgementPackets = 8192
-	var recordCount int16
-	if err := binary.Read(b, binary.BigEndian, &recordCount); err != nil {
-		return err
-	}
-	for i := int16(0); i < recordCount; i++ {
-		recordType, err := b.ReadByte()
-		if err != nil {
-			return err
-		}
-		switch recordType {
-		case packetRange:
-			start, err := readUint24(b)
-			if err != nil {
-				return err
-			}
-			end, err := readUint24(b)
-			if err != nil {
-				return err
-			}
-			for pack := start; pack <= end; pack++ {
-				ack.packets = append(ack.packets, pack)
-				if len(ack.packets) > maxAcknowledgementPackets {
-					return fmt.Errorf("maximum amount of packets in acknowledgement exceeded")
-				}
-			}
-		case packetSingle:
-			packet, err := readUint24(b)
-			if err != nil {
-				return err
-			}
-			ack.packets = append(ack.packets, packet)
-			if len(ack.packets) > maxAcknowledgementPackets {
-				return fmt.Errorf("maximum amount of packets in acknowledgement exceeded")
-			}
-		}
-	}
-	return nil
+	fragments[len(fragments)-1] = b
+	return fragments
 }

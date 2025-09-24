@@ -1,38 +1,59 @@
 package message
 
 import (
-	"bytes"
 	"encoding/binary"
-	"net"
+	"io"
+	"net/netip"
 )
 
 type ConnectionRequestAccepted struct {
-	ClientAddress     net.UDPAddr
-	SystemAddresses   [20]net.UDPAddr
-	RequestTimestamp  int64
-	AcceptedTimestamp int64
+	ClientAddress   netip.AddrPort
+	SystemIndex     uint16
+	SystemAddresses systemAddresses
+	// PingTime is filled out with ConnectionRequest.RequestTime.
+	PingTime int64
+	// PongTime is a timestamp from the moment the packet is sent.
+	PongTime int64
 }
 
-func (pk *ConnectionRequestAccepted) Write(buf *bytes.Buffer) {
-	_ = binary.Write(buf, binary.BigEndian, IDConnectionRequestAccepted)
-	writeAddr(buf, pk.ClientAddress)
-	_ = binary.Write(buf, binary.BigEndian, int16(0))
-	for _, addr := range pk.SystemAddresses {
-		writeAddr(buf, addr)
+func (pk *ConnectionRequestAccepted) UnmarshalBinary(data []byte) error {
+	if len(data) < addrSize(data) {
+		return io.ErrUnexpectedEOF
 	}
-	_ = binary.Write(buf, binary.BigEndian, pk.RequestTimestamp)
-	_ = binary.Write(buf, binary.BigEndian, pk.AcceptedTimestamp)
-}
-
-func (pk *ConnectionRequestAccepted) Read(buf *bytes.Buffer) error {
-	_ = readAddr(buf, &pk.ClientAddress)
-	buf.Next(2)
-	for i := 0; i < 20; i++ {
-		_ = readAddr(buf, &pk.SystemAddresses[i])
-		if buf.Len() == 16 {
+	var offset int
+	pk.ClientAddress, offset = addr(data)
+	pk.SystemIndex = binary.BigEndian.Uint16(data[offset:])
+	offset += 2
+	for i := range 20 {
+		if len(data[offset:]) == 16 {
+			// Some implementations send fewer system addresses.
 			break
 		}
+		if len(data[offset:]) < addrSize(data[offset:]) {
+			return io.ErrUnexpectedEOF
+		}
+		address, n := addr(data[offset:])
+		pk.SystemAddresses[i] = address
+		offset += n
 	}
-	_ = binary.Read(buf, binary.BigEndian, &pk.RequestTimestamp)
-	return binary.Read(buf, binary.BigEndian, &pk.AcceptedTimestamp)
+	if len(data[offset:]) < 16 {
+		return io.ErrUnexpectedEOF
+	}
+	pk.PingTime = int64(binary.BigEndian.Uint64(data[offset:]))
+	pk.PongTime = int64(binary.BigEndian.Uint64(data[offset+8:]))
+	return nil
+}
+
+func (pk *ConnectionRequestAccepted) MarshalBinary() (data []byte, err error) {
+	nAddr, nSys := sizeofAddr(pk.ClientAddress), pk.SystemAddresses.sizeOf()
+	b := make([]byte, 1+nAddr+2+nSys+16)
+	b[0] = IDConnectionRequestAccepted
+	offset := 1 + putAddr(b[1:], pk.ClientAddress)
+	binary.BigEndian.PutUint16(b[offset:], pk.SystemIndex)
+	for _, addr := range pk.SystemAddresses {
+		offset += putAddr(b[offset+2:], addr)
+	}
+	binary.BigEndian.PutUint64(b[offset+2:], uint64(pk.PingTime))
+	binary.BigEndian.PutUint64(b[offset+10:], uint64(pk.PongTime))
+	return b, nil
 }

@@ -1,19 +1,18 @@
 package raknet
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
+	"maps"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net"
-	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet/internal/message"
-
-	"github.com/df-mc/atomic"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet/internal"
 )
 
 // UpstreamPacketListener allows for a custom PacketListener implementation.
@@ -23,105 +22,130 @@ type UpstreamPacketListener interface {
 
 // ListenConfig may be used to pass additional configuration to a Listener.
 type ListenConfig struct {
-	// ErrorLog is a logger that errors from packet decoding are logged to. It may be set to a logger that
-	// simply discards the messages.
-	ErrorLog *log.Logger
+	// ErrorLog is a logger that errors from packet decoding are logged to. By
+	// default, ErrorLog is set to a new slog.Logger with a slog.Handler that
+	// is always disabled. Error messages are thus not logged by default.
+	ErrorLog *slog.Logger
 
 	// UpstreamPacketListener adds an abstraction for net.ListenPacket.
 	UpstreamPacketListener UpstreamPacketListener
+
+	// DisableCookies specifies if cookies should be generated and verified for
+	// new incoming connections. This is a security measure against IP spoofing,
+	// but some server providers (OVH in particular) have existing protection
+	// systems that interfere with this. In this case, DisableCookies should be
+	// set to true.
+	DisableCookies bool
+	// BlockDuration specifies how long IP addresses should be blocked if an
+	// error is encountered during the handling of packets from an address.
+	// BlockDuration defaults to 10s. If set to a negative value, IP addresses
+	// are never blocked on errors.
+	BlockDuration time.Duration
 }
 
-// Listener implements a RakNet connection listener. It follows the same methods as those implemented by the
-// TCPListener in the net package.
-// Listener implements the net.Listener interface.
+// Listener implements a RakNet connection listener. It follows the same
+// methods as those implemented by the TCPListener in the net package. Listener
+// implements the net.Listener interface.
 type Listener struct {
+	conf    ListenConfig
+	handler *listenerConnectionHandler
+	sec     *security
+
 	once   sync.Once
 	closed chan struct{}
 
-	// log is a logger that errors from packet decoding are logged to. It may be set to a logger that
-	// simply discards the messages.
-	log *log.Logger
-
 	conn net.PacketConn
-	// incoming is a channel of incoming connections. Connections that end up in here will also end up in
-	// the connections map.
+	// incoming is a channel of incoming connections. Connections that end up in
+	// here will also end up in the connections map.
 	incoming chan *Conn
 
-	// connections is a map of currently active connections, indexed by their address.
+	// connections is a map of currently active connections, indexed by their
+	// address.
 	connections sync.Map
 
-	// id is a random server ID generated upon starting listening. It is used several times throughout the
-	// connection sequence of RakNet.
+	// id is a random server ID generated upon starting listening. It is used
+	// several times throughout the connection sequence of RakNet.
 	id int64
 
-	// pongData is a byte slice of data that is sent in an unconnected pong packet each time the client sends
-	// and unconnected ping to the server.
-	pongData atomic.Value[[]byte]
+	// pongData is a byte slice of data that is sent in an unconnected pong
+	// packet each time the client sends and unconnected ping to the server.
+	pongData atomic.Pointer[[]byte]
 }
 
 // listenerID holds the next ID to use for a Listener.
-var listenerID = atomic.NewInt64(rand.New(rand.NewSource(time.Now().Unix())).Int63())
+var listenerID = rand.Int64()
 
-// Listen listens on the address passed and returns a listener that may be used to accept connections. If not
-// successful, an error is returned.
-// The address follows the same rules as those defined in the net.TCPListen() function.
-// Specific features of the listener may be modified once it is returned, such as the used log and/or the
-// accepted protocol.
-func (l ListenConfig) Listen(address string) (*Listener, error) {
+// Listen listens on the address passed and returns a listener that may be used
+// to accept connections. If not successful, an error is returned. The address
+// follows the same rules as those defined in the net.TCPListen() function.
+// Specific features of the listener may be modified once it is returned, such
+// as the used log and/or the accepted protocol.
+func (conf ListenConfig) Listen(address string) (*Listener, error) {
+	if conf.ErrorLog == nil {
+		conf.ErrorLog = slog.New(internal.DiscardHandler{})
+	}
+	conf.ErrorLog = conf.ErrorLog.With("src", "listener")
+
+	if conf.BlockDuration == 0 {
+		conf.BlockDuration = time.Second * 10
+	}
 	var conn net.PacketConn
 	var err error
 
-	if l.UpstreamPacketListener == nil {
+	if conf.UpstreamPacketListener == nil {
 		conn, err = net.ListenPacket("udp", address)
 	} else {
-		conn, err = l.UpstreamPacketListener.ListenPacket("udp", address)
+		conn, err = conf.UpstreamPacketListener.ListenPacket("udp", address)
 	}
 	if err != nil {
 		return nil, &net.OpError{Op: "listen", Net: "raknet", Source: nil, Addr: nil, Err: err}
 	}
 	listener := &Listener{
+		conf:     conf,
 		conn:     conn,
 		incoming: make(chan *Conn),
 		closed:   make(chan struct{}),
-		log:      log.New(os.Stderr, "", log.LstdFlags),
-		id:       listenerID.Inc(),
+		id:       atomic.AddInt64(&listenerID, 1),
+		sec:      newSecurity(conf),
 	}
-	if l.ErrorLog != nil {
-		listener.log = l.ErrorLog
-	}
+	listener.handler = &listenerConnectionHandler{l: listener, cookieSalt: rand.Uint32()}
+	listener.pongData.Store(new([]byte))
 
 	go listener.listen()
+	go listener.sec.gc(listener.closed)
 	return listener, nil
 }
 
-// Listen listens on the address passed and returns a listener that may be used to accept connections. If not
-// successful, an error is returned.
-// The address follows the same rules as those defined in the net.TCPListen() function.
-// Specific features of the listener may be modified once it is returned, such as the used log and/or the
-// accepted protocol.
+// Listen listens on the address passed and returns a listener that may be used
+// to accept connections. If not successful, an error is returned. The address
+// follows the same rules as those defined in the net.TCPListen() function.
+// Specific features of the listener may be modified once it is returned, such
+// as the used log and/or the accepted protocol.
 func Listen(address string) (*Listener, error) {
 	var lc ListenConfig
 	return lc.Listen(address)
 }
 
-// Accept blocks until a connection can be accepted by the listener. If successful, Accept returns a
-// connection that is ready to send and receive data. If not successful, a nil listener is returned and an
-// error describing the problem.
+// Accept blocks until a connection can be accepted by the listener. If
+// successful, Accept returns a connection that is ready to send and receive
+// data. If not successful, a nil listener is returned and an error describing
+// the problem.
 func (listener *Listener) Accept() (net.Conn, error) {
 	conn, ok := <-listener.incoming
 	if !ok {
-		return nil, &net.OpError{Op: "accept", Net: "raknet", Source: nil, Addr: nil, Err: errListenerClosed}
+		return nil, &net.OpError{Op: "accept", Net: "raknet", Source: nil, Addr: nil, Err: ErrListenerClosed}
 	}
 	return conn, nil
 }
 
-// Addr returns the address the Listener is bound to and listening for connections on.
+// Addr returns the address the Listener is bound to and listening for
+// connections on.
 func (listener *Listener) Addr() net.Addr {
 	return listener.conn.LocalAddr()
 }
 
-// Close closes the listener so that it may be cleaned up. It makes sure the goroutine handling incoming
-// packets is able to be freed.
+// Close closes the listener so that it may be cleaned up. It makes sure the
+// goroutine handling incoming packets is able to be freed.
 func (listener *Listener) Close() error {
 	var err error
 	listener.once.Do(func() {
@@ -131,71 +155,54 @@ func (listener *Listener) Close() error {
 	return err
 }
 
-// PongData sets the pong data that is used to respond with when a client sends a ping. It usually holds game
-// specific data that is used to display in a server list.
-// If a data slice is set with a size bigger than math.MaxInt16, the function panics.
+// PongData sets the pong data that is used to respond with when a client sends
+// a ping. It usually holds game specific data that is used to display in a
+// server list. If a data slice is set with a size bigger than math.MaxInt16,
+// the function panics.
 func (listener *Listener) PongData(data []byte) {
 	if len(data) > math.MaxInt16 {
-		panic(fmt.Sprintf("error setting pong data: pong data must not be longer than %v", math.MaxInt16))
+		panic(fmt.Sprintf("pong data: must be no longer than %v bytes, got %v", math.MaxInt16, len(data)))
 	}
-	listener.pongData.Store(data)
+	listener.pongData.Store(&data)
 }
 
-// ID returns the unique ID of the listener. This ID is usually used by a client to identify a specific
-// server during a single session.
+// ID returns the unique ID of the listener. This ID is usually used by a
+// client to identify a specific server during a single session.
 func (listener *Listener) ID() int64 {
 	return listener.id
 }
 
-// listen continuously reads from the listener's UDP connection, until closed has a value in it.
+// listen continuously reads from the listener's UDP connection, until closed
+// has a value in it.
 func (listener *Listener) listen() {
-	// Create a buffer with the maximum size a UDP packet sent over RakNet is allowed to have. We can re-use
-	// this buffer for each packet.
+	// Create a buffer with the maximum size a UDP packet sent over RakNet is
+	// allowed to have. We can re-use this buffer for each packet.
 	b := make([]byte, 1500)
-	buf := bytes.NewBuffer(b[:0])
 	for {
 		n, addr, err := listener.conn.ReadFrom(b)
 		if err != nil {
-			close(listener.incoming)
-			return
+			if errors.Is(err, net.ErrClosed) {
+				close(listener.incoming)
+				return
+			}
+			listener.conf.ErrorLog.Error("read from: " + err.Error())
+			continue
+		} else if n == 0 || listener.sec.blocked(addr) {
+			continue
 		}
-		_, _ = buf.Write(b[:n])
-
-		// Technically we should not re-use the same byte slice after its ownership has been taken by the
-		// buffer, but we can do this anyway because we copy the data later.
-		if err := listener.handle(buf, addr); err != nil {
-			listener.log.Printf("listener: error handling packet (addr = %v): %v\n", addr, err)
+		if err = listener.handle(b[:n], addr); err != nil && !errors.Is(err, net.ErrClosed) {
+			listener.conf.ErrorLog.Error("handle packet: "+err.Error(), "raddr", addr.String(), "block-duration", max(0, listener.conf.BlockDuration))
+			listener.sec.block(addr)
 		}
-		buf.Reset()
 	}
 }
 
-// handle handles an incoming packet in buffer b from the address passed. If not successful, an error is
-// returned describing the issue.
-func (listener *Listener) handle(b *bytes.Buffer, addr net.Addr) error {
-	value, found := listener.connections.Load(addr.String())
+// handle handles an incoming packet in buffer b from the address passed. If
+// not successful, an error is returned describing the issue.
+func (listener *Listener) handle(b []byte, addr net.Addr) error {
+	value, found := listener.connections.Load(resolve(addr))
 	if !found {
-		// If there was no session yet, it means the packet is an offline message. It is not contained in a
-		// datagram.
-		packetID, err := b.ReadByte()
-		if err != nil {
-			return fmt.Errorf("error reading packet ID byte: %v", err)
-		}
-		switch packetID {
-		case message.IDUnconnectedPing, message.IDUnconnectedPingOpenConnections:
-			return listener.handleUnconnectedPing(b, addr)
-		case message.IDOpenConnectionRequest1:
-			return listener.handleOpenConnectionRequest1(b, addr)
-		case message.IDOpenConnectionRequest2:
-			return listener.handleOpenConnectionRequest2(b, addr)
-		default:
-			// In some cases, the client will keep trying to send datagrams while it has already timed out. In
-			// this case, we should not print an error.
-			if packetID&bitFlagDatagram == 0 {
-				return fmt.Errorf("unknown packet received (%x): %x", packetID, b.Bytes())
-			}
-		}
-		return nil
+		return listener.handler.handleUnconnected(b, addr)
 	}
 	conn := value.(*Conn)
 	select {
@@ -203,96 +210,85 @@ func (listener *Listener) handle(b *bytes.Buffer, addr net.Addr) error {
 		// Connection was closed already.
 		return nil
 	default:
-		err := conn.receive(b)
-		if err != nil {
+		if err := conn.receive(b); err != nil {
 			conn.closeImmediately()
+			return err
 		}
-		return err
+		return nil
 	}
 }
 
-// handleOpenConnectionRequest2 handles an open connection request 2 packet stored in buffer b, coming from
-// an address addr.
-func (listener *Listener) handleOpenConnectionRequest2(b *bytes.Buffer, addr net.Addr) error {
-	packet := &message.OpenConnectionRequest2{}
-	if err := packet.Read(b); err != nil {
-		return fmt.Errorf("error reading open connection request 2: %v", err)
-	}
-	b.Reset()
+// security implements security measurements against DoS attacks against a
+// Listener.
+type security struct {
+	conf ListenConfig
 
-	mtuSize := packet.ClientPreferredMTUSize
-	if mtuSize > maxMTUSize {
-		mtuSize = maxMTUSize
-	}
+	blockCount atomic.Uint32
 
-	(&message.OpenConnectionReply2{ServerGUID: listener.id, ClientAddress: *addr.(*net.UDPAddr), MTUSize: mtuSize}).Write(b)
-	if _, err := listener.conn.WriteTo(b.Bytes(), addr); err != nil {
-		return fmt.Errorf("error sending open connection reply 2: %v", err)
-	}
+	mu     sync.Mutex
+	blocks map[[16]byte]time.Time
+}
 
-	conn := newConn(listener.conn, addr, packet.ClientPreferredMTUSize)
-	conn.close = func() {
-		// Make sure to remove the connection from the Listener once the Conn is closed.
-		listener.connections.Delete(addr.String())
-	}
-	listener.connections.Store(addr.String(), conn)
+// newSecurity uses settings from a ListenConfig to create a security.
+func newSecurity(conf ListenConfig) *security {
+	return &security{conf: conf, blocks: make(map[[16]byte]time.Time)}
+}
 
-	go func() {
-		t := time.NewTimer(time.Second * 10)
-		defer t.Stop()
+// gc clears garbage from the security layer every second until the stop channel
+// passed is closed.
+func (s *security) gc(stop <-chan struct{}) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
 		select {
-		case <-conn.connected:
-			// Add the connection to the incoming channel so that a caller of Accept() can receive it.
-			listener.incoming <- conn
-		case <-listener.closed:
-			_ = conn.Close()
-		case <-t.C:
-			// It took too long to complete this connection. We closed it and go back to accepting.
-			_ = conn.Close()
+		case <-ticker.C:
+			s.gcBlocks()
+		case <-stop:
+			return
 		}
-	}()
-
-	return nil
+	}
 }
 
-// handleOpenConnectionRequest1 handles an open connection request 1 packet stored in buffer b, coming from
-// an address addr.
-func (listener *Listener) handleOpenConnectionRequest1(b *bytes.Buffer, addr net.Addr) error {
-	packet := &message.OpenConnectionRequest1{}
-	if err := packet.Read(b); err != nil {
-		return fmt.Errorf("error reading open connection request 1: %v", err)
+// block stops the handling of packets originating from the IP of a net.Addr.
+func (s *security) block(addr net.Addr) {
+	if s.conf.BlockDuration < 0 {
+		return
 	}
-	b.Reset()
-	mtuSize := packet.MaximumSizeNotDropped
-	if mtuSize > maxMTUSize {
-		mtuSize = maxMTUSize
-	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if packet.Protocol != currentProtocol {
-		(&message.IncompatibleProtocolVersion{ServerGUID: listener.id, ServerProtocol: currentProtocol}).Write(b)
-		_, _ = listener.conn.WriteTo(b.Bytes(), addr)
-		return fmt.Errorf("error handling open connection request 1: incompatible protocol version %v (listener protocol = %v)", packet.Protocol, currentProtocol)
-	}
-
-	(&message.OpenConnectionReply1{ServerGUID: listener.id, Secure: false, ServerPreferredMTUSize: mtuSize}).Write(b)
-	_, err := listener.conn.WriteTo(b.Bytes(), addr)
-	return err
+	s.blockCount.Add(1)
+	s.blocks[[16]byte(addr.(*net.UDPAddr).IP.To16())] = time.Now()
 }
 
-// handleUnconnectedPing handles an unconnected ping packet stored in buffer b, coming from an address addr.
-func (listener *Listener) handleUnconnectedPing(b *bytes.Buffer, addr net.Addr) error {
-	pk := &message.UnconnectedPing{}
-	if err := pk.Read(b); err != nil {
-		return fmt.Errorf("error reading unconnected ping: %v", err)
+// blocked checks if the IP of a net.Addr is currently blocked from any packet
+// handling.
+func (s *security) blocked(addr net.Addr) bool {
+	if s.conf.BlockDuration < 0 || s.blockCount.Load() == 0 {
+		// Fast path optimisation: Prevents (relatively costly) map lookups.
+		return false
 	}
-	b.Reset()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	(&message.UnconnectedPong{ServerGUID: listener.id, SendTimestamp: pk.SendTimestamp, Data: listener.pongData.Load()}).Write(b)
-	_, err := listener.conn.WriteTo(b.Bytes(), addr)
-	return err
+	_, blocked := s.blocks[[16]byte(addr.(*net.UDPAddr).IP.To16())]
+	return blocked
 }
 
-// timestamp returns a timestamp in milliseconds.
-func timestamp() int64 {
-	return time.Now().UnixNano() / int64(time.Second)
+// gcBlocks removes blocks from the map that are no longer active. gcBlocks only
+// attempts to clear outdated blocks if there are two times more blocks active
+// than there were after the previous call to gcBlocks.
+func (s *security) gcBlocks() {
+	if s.blockCount.Load() == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	maps.DeleteFunc(s.blocks, func(ip [16]byte, t time.Time) bool {
+		return now.Sub(t) > s.conf.BlockDuration
+	})
+	s.blockCount.Store(uint32(len(s.blocks)))
 }

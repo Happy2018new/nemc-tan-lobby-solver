@@ -27,7 +27,7 @@ func main() {
 		}
 		defer listenConfig.CloseRoom()
 
-		fmt.Printf("[SUCCESS] Create room: %d", roomID)
+		fmt.Printf("[SUCCESS] Create room: %d\n", roomID)
 		for {
 			clientConn, err := listener.Accept()
 			if err != nil {

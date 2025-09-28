@@ -4,7 +4,6 @@ go 1.25
 
 require (
 	github.com/andreburgaud/crypt2go v1.8.0
-	github.com/df-mc/atomic v1.10.0
 	github.com/go-gl/mathgl v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/pion/ice/v4 v4.0.10

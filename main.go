@@ -19,9 +19,12 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		wrapper := auth.NewServerAccessWrapper(client, "YOUR FB TOKEN")
+		wrapper := auth.NewAccessWrapper(client, "YOUR FB TOKEN")
 
-		listenConfig, listener, roomID, err := service.Listen(wrapper, "ROOM NAME")
+		listenConfig, listener, roomID, err := service.Listen(
+			service.DefaultRoomConfig("来和我一起玩吧！", "", 10, service.PlayerPermissionMember),
+			wrapper,
+		)
 		if err != nil {
 			panic(err)
 		}
@@ -73,8 +76,8 @@ func main() {
 			panic(err)
 		}
 
-		wrapper := auth.NewClientAccessWrapper(client, "ROOM ID", "", "YOUR FB TOKEN")
-		netConn, tanLobbyLoginResp, err := service.Dial(wrapper)
+		wrapper := auth.NewAccessWrapper(client, "YOUR FB TOKEN")
+		netConn, tanLobbyLoginResp, err := service.Dial("ROOM ID", "ROOM PASSCODE", wrapper)
 		if err != nil {
 			panic(err)
 		}

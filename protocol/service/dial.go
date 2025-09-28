@@ -19,15 +19,17 @@ import (
 // Dialer ..
 type Dialer struct {
 	Authenticator
+	RoomID         string
+	RoomPasscode   string
 	clientNetherID uint64
 }
 
 // Dial ..
-func Dial(authenticator Authenticator) (net.Conn, auth.TanLobbyLoginResponse, error) {
+func Dial(roomID string, roomPasscode string, authenticator Authenticator) (net.Conn, auth.TanLobbyLoginResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
-	conn, tanLobbyLoginResp, err := DialContext(ctx, authenticator)
+	conn, tanLobbyLoginResp, err := DialContext(ctx, roomID, roomPasscode, authenticator)
 	if err != nil {
 		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("Dial: %v", err)
 	}
@@ -36,8 +38,17 @@ func Dial(authenticator Authenticator) (net.Conn, auth.TanLobbyLoginResponse, er
 }
 
 // DialContext ..
-func DialContext(ctx context.Context, authenticator Authenticator) (net.Conn, auth.TanLobbyLoginResponse, error) {
-	dialer := Dialer{Authenticator: authenticator}
+func DialContext(
+	ctx context.Context,
+	roomID string,
+	roomPasscode string,
+	authenticator Authenticator,
+) (net.Conn, auth.TanLobbyLoginResponse, error) {
+	dialer := Dialer{
+		Authenticator: authenticator,
+		RoomID:        roomID,
+		RoomPasscode:  roomPasscode,
+	}
 	conn, tanLobbyLoginResp, err := dialer.DialContext(ctx)
 	if err != nil {
 		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
@@ -52,7 +63,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 ) {
 	// Generate client nether ID and parse basic info
 	d.clientNetherID = rand.Uint64()
-	roomID, err := strconv.ParseUint(d.Authenticator.GetRoomID(), 10, 32)
+	roomID, err := strconv.ParseUint(d.RoomID, 10, 32)
 	if err != nil {
 		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
@@ -103,7 +114,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	err = writeRaknetPacket(enc, &packet.TanEnterRoomRequest{
 		OwnerID:               tanLobbyLoginResp.RoomOwnerID,
 		RoomID:                uint32(roomID),
-		EnterPassword:         d.Authenticator.GetRoomPasscode(),
+		EnterPassword:         d.RoomPasscode,
 		EnterTeamID:           0,
 		EnterToken:            0,
 		FollowTeamID:          0,
@@ -169,7 +180,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 // DialContext ..
 func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.TanLobbyLoginResponse, err error) {
 	// First we query room info
-	tanLobbyLoginResp, err := d.Authenticator.GetAccess()
+	tanLobbyLoginResp, err := d.Authenticator.GetAccess(d.RoomID)
 	if err != nil {
 		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}

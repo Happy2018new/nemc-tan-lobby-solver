@@ -19,13 +19,14 @@ import (
 // ListenConfig ..
 type ListenConfig struct {
 	Authenticator
+	RoomConfig
 	serverNetherID    uint64
 	raknetConnection  net.Conn
 	netherNetListener *nethernet.Listener
 }
 
 // Listen ..
-func Listen(authenticator Authenticator, roomName string) (
+func Listen(roomConfig RoomConfig, authenticator Authenticator) (
 	listenConfig *ListenConfig,
 	listener *nethernet.Listener,
 	roomID uint32,
@@ -34,7 +35,7 @@ func Listen(authenticator Authenticator, roomName string) (
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
-	listenConfig, listener, roomID, err = ListenContext(ctx, authenticator, roomName)
+	listenConfig, listener, roomID, err = ListenContext(ctx, roomConfig, authenticator)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("Listen: %v", err)
 	}
@@ -43,14 +44,17 @@ func Listen(authenticator Authenticator, roomName string) (
 }
 
 // ListenContext ..
-func ListenContext(ctx context.Context, authenticator Authenticator, roomName string) (
+func ListenContext(ctx context.Context, roomConfig RoomConfig, authenticator Authenticator) (
 	listenConfig *ListenConfig,
 	listener *nethernet.Listener,
 	roomID uint32,
 	err error,
 ) {
-	listenConfig = &ListenConfig{Authenticator: authenticator}
-	listener, roomID, err = listenConfig.ListenContext(ctx, roomName)
+	listenConfig = &ListenConfig{
+		Authenticator: authenticator,
+		RoomConfig:    roomConfig,
+	}
+	listener, roomID, err = listenConfig.ListenContext(ctx)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
@@ -60,7 +64,6 @@ func ListenContext(ctx context.Context, authenticator Authenticator, roomName st
 // createTanLobbyRoom ..
 func (l *ListenConfig) createTanLobbyRoom(
 	ctx context.Context,
-	roomName string,
 	tanLobbyCreateResp auth.TanLobbyCreateResponse,
 ) (
 	conn net.Conn,
@@ -116,63 +119,62 @@ func (l *ListenConfig) createTanLobbyRoom(
 	dec.EnableEncryption(tanLobbyCreateResp.EncryptKeyBytes, tanLobbyCreateResp.DecryptKeyBytes)
 
 	// Create room
-	for {
-		err = writeRaknetPacket(enc, &packet.TanCreateRoomRequest{
-			Capacity: 10, // Max player count
-			Privacy:  0,  // 0: Everyone can see, 1: Friends can see
-			Name:     "",
-			Tips: encoding.RoomTips{
-				LevelID:            "World",
-				GameType:           0,
-				ConstantTestString: "test",
-				Vioce:              0,
-				ProtocolID:         38,
-			},
-			ItemIDs:      nil,
-			MinLevel:     0,
-			PvP:          true,
-			TeamID:       0,
-			PlayerAuth:   1, // Player permission: Member
-			Password:     "",
-			Slogan:       roomName,
-			MapID:        0,
-			EnableWebRTC: true,
-			OwnerPing:    3,
-			PerfLv:       1,
-		})
-		if err != nil {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
-		}
-
-		// Read create room response
-		pk, err = readRaknetPacket(dec)
-		if err != nil {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
-		}
-		tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
-		if !ok {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
-		}
-
-		// Handle create room response
-		if tanCreateRoomResp.ErrorCode == packet.TanCreateRoomNeedVipToSetRoomName {
-			roomName = "来和我一起玩吧！"
-			continue
-		}
-		if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
-		}
-
-		// Return
-		return conn, enc, dec, tanCreateRoomResp.RoomID, nil
+	err = writeRaknetPacket(enc, &packet.TanCreateRoomRequest{
+		Capacity: l.RoomConfig.MaxPlayerCount,
+		Privacy:  l.RoomConfig.RoomPrivacy,
+		Name:     "",
+		Tips: encoding.RoomTips{
+			LevelID:            "World",
+			GameType:           0,
+			ConstantTestString: "test",
+			Vioce:              0,
+			ProtocolID:         38,
+		},
+		ItemIDs:      l.RoomConfig.UsedModItemIDs,
+		MinLevel:     0,
+		PvP:          l.RoomConfig.AllowPvP,
+		TeamID:       0,
+		PlayerAuth:   l.RoomConfig.PlayerPermission,
+		Password:     l.RoomConfig.RoomPasscode,
+		Slogan:       l.RoomConfig.RoomName,
+		MapID:        0,
+		EnableWebRTC: true,
+		OwnerPing:    3,
+		PerfLv:       1,
+	})
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
+
+	// Read create room response
+	pk, err = readRaknetPacket(dec)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
+	}
+	tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
+	if !ok {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
+	}
+
+	// Handle create room response
+	if tanCreateRoomResp.ErrorCode == packet.TanCreateRoomNeedVipToSetRoomName {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only use built in room name (Need VIP to set custom name)")
+	}
+	if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
+	}
+
+	// Return
+	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
 }
 
 // ListenContext ..
-func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (listener *nethernet.Listener, roomID uint32, err error) {
+func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.Listener, roomID uint32, err error) {
 	// Prepare
 	var enc *packet.Encoder
 	var dec *packet.Decoder
@@ -188,7 +190,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 	}
 
 	// Create tan lobby room
-	l.raknetConnection, enc, dec, roomID, err = l.createTanLobbyRoom(ctx, roomName, tanLobbyCreateResp)
+	l.raknetConnection, enc, dec, roomID, err = l.createTanLobbyRoom(ctx, tanLobbyCreateResp)
 	if err != nil {
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
@@ -228,13 +230,27 @@ func (l *ListenConfig) ListenContext(ctx context.Context, roomName string) (list
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
 
+	// Init listen config
+	listenConfig := nethernet.ListenConfig{
+		ConnContext: func(parent context.Context, conn *nethernet.Conn) context.Context {
+			ctx, cancel := context.WithTimeout(parent, time.Second*30)
+			go func() {
+				<-ctx.Done()
+				cancel()
+			}()
+			return ctx
+		},
+	}
+
 	// Create listener
-	l.netherNetListener, err = nethernet.ListenConfig{}.Listen(wsConnection)
+	l.netherNetListener, err = listenConfig.Listen(wsConnection)
 	if err != nil {
 		_ = l.raknetConnection.Close()
 		_ = wsConnection.Close()
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
+
+	// Return
 	return l.netherNetListener, roomID, nil
 }
 

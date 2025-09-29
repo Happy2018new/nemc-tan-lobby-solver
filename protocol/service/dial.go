@@ -83,7 +83,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 
 	// Send login request
-	err = writeRaknetPacket(enc, &packet.TanLoginRequest{
+	err = writePacket(enc, &packet.TanLoginRequest{
 		PlayerID:   tanLobbyLoginResp.UserUniqueID,
 		Rand:       tanLobbyLoginResp.RaknetRand,
 		AESRand:    tanLobbyLoginResp.RaknetAESRand,
@@ -94,7 +94,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 
 	// Handle login response
-	pk, err := readRaknetPacket(dec)
+	pk, err := readPacketWithContext(ctx, conn, dec)
 	if err != nil {
 		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
@@ -111,7 +111,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	dec.EnableEncryption(tanLobbyLoginResp.EncryptKeyBytes, tanLobbyLoginResp.DecryptKeyBytes)
 
 	// Enter room
-	err = writeRaknetPacket(enc, &packet.TanEnterRoomRequest{
+	err = writePacket(enc, &packet.TanEnterRoomRequest{
 		OwnerID:               tanLobbyLoginResp.RoomOwnerID,
 		RoomID:                uint32(roomID),
 		EnterPassword:         d.RoomPasscode,
@@ -126,7 +126,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 	}
 
 	// Handle enter room response
-	pk, err = readRaknetPacket(dec)
+	pk, err = readPacketWithContext(ctx, conn, dec)
 	if err != nil {
 		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 	}
@@ -147,33 +147,22 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 		}
 	}
 
-	// Read incoming packet
-	pkChannel := make(chan packet.Packet, 1)
-	go func() {
-		pk, err = readRaknetPacket(dec)
+	// Read and handle incoming packet
+	pk, err = readPacketWithContext(ctx, conn, dec)
+	if err != nil {
+		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
+	}
+	switch p := pk.(type) {
+	case *packet.TanNotifyServerReady:
+		remoteNetherNetID, err = strconv.ParseUint(p.NetherNetID, 10, 64)
 		if err != nil {
-			return
+			return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 		}
-		pkChannel <- pk
-	}()
-
-	// Handle incoming packet
-	select {
-	case <-ctx.Done():
-		return 0, fmt.Errorf("enterTanLobbyRoom: %v", ctx.Err())
-	case pk := <-pkChannel:
-		switch p := pk.(type) {
-		case *packet.TanNotifyServerReady:
-			remoteNetherNetID, err = strconv.ParseUint(p.NetherNetID, 10, 64)
-			if err != nil {
-				return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
-			}
-			return remoteNetherNetID, nil
-		case *packet.TanKickOutResponse:
-			return 0, fmt.Errorf("enterTanLobbyRoom: The host owner kick you from the room")
-		default:
-			return 0, fmt.Errorf("enterTanLobbyRoom: Unknown packet received; pk = %#v", pk)
-		}
+		return remoteNetherNetID, nil
+	case *packet.TanKickOutResponse:
+		return 0, fmt.Errorf("enterTanLobbyRoom: The host owner kick you from the room")
+	default:
+		return 0, fmt.Errorf("enterTanLobbyRoom: Unknown packet received; pk = %#v", pk)
 	}
 }
 

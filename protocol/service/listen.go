@@ -87,7 +87,7 @@ func (l *ListenConfig) createTanLobbyRoom(
 	}
 
 	// Send login request
-	err = writeRaknetPacket(enc, &packet.TanLoginRequest{
+	err = writePacket(enc, &packet.TanLoginRequest{
 		PlayerID:   tanLobbyCreateResp.UserUniqueID,
 		Rand:       tanLobbyCreateResp.RaknetRand,
 		AESRand:    tanLobbyCreateResp.RaknetAESRand,
@@ -99,7 +99,7 @@ func (l *ListenConfig) createTanLobbyRoom(
 	}
 
 	// Handle login response
-	pk, err := readRaknetPacket(dec)
+	pk, err := readPacketWithContext(ctx, conn, dec)
 	if err != nil {
 		_ = conn.Close()
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
@@ -119,7 +119,7 @@ func (l *ListenConfig) createTanLobbyRoom(
 	dec.EnableEncryption(tanLobbyCreateResp.EncryptKeyBytes, tanLobbyCreateResp.DecryptKeyBytes)
 
 	// Create room
-	err = writeRaknetPacket(enc, &packet.TanCreateRoomRequest{
+	err = writePacket(enc, &packet.TanCreateRoomRequest{
 		Capacity: l.RoomConfig.MaxPlayerCount,
 		Privacy:  l.RoomConfig.RoomPrivacy,
 		Name:     "",
@@ -147,40 +147,30 @@ func (l *ListenConfig) createTanLobbyRoom(
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 
-	// Read incoming packet
-	pkChannel := make(chan packet.Packet, 1)
-	go func() {
-		pk, err = readRaknetPacket(dec)
-		if err != nil {
-			return
-		}
-		pkChannel <- pk
-	}()
-
-	// Handle incoming packet
-	select {
-	case <-ctx.Done():
+	// Read create room response
+	pk, err = readPacketWithContext(ctx, conn, dec)
+	if err != nil {
 		_ = conn.Close()
-		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", ctx.Err())
-	case pk := <-pkChannel:
-		// Assert incoming packet
-		tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
-		if !ok {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
-		}
-		// Handle create room response
-		if tanCreateRoomResp.ErrorCode == packet.TanCreateRoomNeedVipToSetRoomName {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only use built in room name (Need VIP to set custom name)")
-		}
-		if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
-		}
-		// Return
-		return conn, enc, dec, tanCreateRoomResp.RoomID, nil
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
+	tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
+	if !ok {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
+	}
+
+	// Handle create room response
+	if tanCreateRoomResp.ErrorCode == packet.TanCreateRoomNeedVipToSetRoomName {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only use built in room name (Need VIP to set custom name)")
+	}
+	if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
+		_ = conn.Close()
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
+	}
+
+	// Return
+	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
 }
 
 // ListenContext ..
@@ -206,7 +196,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 	}
 	go func() {
 		for {
-			pk, err := readRaknetPacket(dec)
+			pk, err := readPacket(dec)
 			if err != nil {
 				l.CloseRoom()
 				return
@@ -214,7 +204,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 			if _, ok := pk.(*packet.TanNewGuestResponse); !ok {
 				continue
 			}
-			writeRaknetPacket(enc, &packet.TanNotifyServerReady{
+			writePacket(enc, &packet.TanNotifyServerReady{
 				ServerAddress:         "127.0.0.1|19132",
 				ServerRaknetGuid:      "",
 				RTCRoomID:             fmt.Sprintf("%d", roomID),

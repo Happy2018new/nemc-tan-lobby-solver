@@ -147,30 +147,40 @@ func (l *ListenConfig) createTanLobbyRoom(
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 	}
 
-	// Read create room response
-	pk, err = readRaknetPacket(dec)
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
-	}
-	tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
-	if !ok {
-		_ = conn.Close()
-		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
-	}
+	// Read incoming packet
+	pkChannel := make(chan packet.Packet, 1)
+	go func() {
+		pk, err = readRaknetPacket(dec)
+		if err != nil {
+			return
+		}
+		pkChannel <- pk
+	}()
 
-	// Handle create room response
-	if tanCreateRoomResp.ErrorCode == packet.TanCreateRoomNeedVipToSetRoomName {
+	// Handle incoming packet
+	select {
+	case <-ctx.Done():
 		_ = conn.Close()
-		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only use built in room name (Need VIP to set custom name)")
+		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", ctx.Err())
+	case pk := <-pkChannel:
+		// Assert incoming packet
+		tanCreateRoomResp, ok := pk.(*packet.TanCreateRoomResponse)
+		if !ok {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanEnterRoomResponse, but got %#v", pk)
+		}
+		// Handle create room response
+		if tanCreateRoomResp.ErrorCode == packet.TanCreateRoomNeedVipToSetRoomName {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only use built in room name (Need VIP to set custom name)")
+		}
+		if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
+		}
+		// Return
+		return conn, enc, dec, tanCreateRoomResp.RoomID, nil
 	}
-	if tanCreateRoomResp.ErrorCode != packet.TanCreateRoomSuccess {
-		_ = conn.Close()
-		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
-	}
-
-	// Return
-	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
 }
 
 // ListenContext ..

@@ -7,14 +7,14 @@ import (
 	"math/rand"
 	"net/http"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/core/nethernet"
 	"github.com/coder/websocket"
 )
 
 // Dialer ..
 type Dialer struct {
-	Options   *websocket.DialOptions
-	NetworkID uint64
+	Options       *websocket.DialOptions
+	NetworkID     uint64
+	serverAddress string
 }
 
 // DialContext ..
@@ -40,7 +40,7 @@ func (d Dialer) DialContext(
 		d.NetworkID = rand.Uint64()
 	}
 
-	finalAddress := fmt.Sprintf(
+	d.serverAddress = fmt.Sprintf(
 		"ws://%s/%d/%d/%s/%s",
 		serverBaseAddress,
 		clientNetherID,
@@ -48,27 +48,14 @@ func (d Dialer) DialContext(
 		base64.URLEncoding.EncodeToString(signalingSeed),
 		base64.URLEncoding.EncodeToString(signalingTicket),
 	)
-	c, _, err := websocket.Dial(ctx, finalAddress, d.Options)
+	c, _, err := websocket.Dial(ctx, d.serverAddress, d.Options)
 	if err != nil {
 		return nil, err
 	}
 
-	conn := &Conn{
-		conn:    c,
-		d:       d,
-		signals: make(chan *nethernet.Signal),
-		ready:   make(chan struct{}),
+	conn, err := NewConn(ctx, c, d)
+	if err != nil {
+		return nil, fmt.Errorf("DialContext: %v", err)
 	}
-	var cancel context.CancelCauseFunc
-	conn.ctx, cancel = context.WithCancelCause(context.Background())
-
-	go conn.read(cancel)
-	go conn.ping()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-conn.ready:
-		return conn, nil
-	}
+	return conn, nil
 }

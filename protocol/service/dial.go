@@ -184,7 +184,7 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.
 	}
 
 	// Connect to websocket signaling server
-	wsConn, err := signaling.Dialer{
+	wsConnection, err := signaling.Dialer{
 		NetworkID: d.clientNetherID,
 	}.DialContext(
 		ctx,
@@ -197,13 +197,13 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.
 	if err != nil {
 		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
-	defer wsConn.Close()
+	defer wsConnection.Close()
 
 	// At last we can connect to remote room
 	conn, err = nethernet.Dialer{}.DialContext(
 		ctx,
 		remoteNetherNetID,
-		wsConn,
+		wsConnection,
 	)
 	if err != nil {
 		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)

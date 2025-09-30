@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"container/list"
@@ -24,9 +25,8 @@ const (
 
 // Conn ..
 type Conn struct {
-	isRefreshing  bool
-	refreshMutex  *sync.Mutex
-	refreshWaiter *sync.WaitGroup
+	globalMutex     *sync.Mutex
+	runningReadFunc *atomic.Int32
 
 	conn   *websocket.Conn
 	ctx    context.Context
@@ -42,14 +42,13 @@ type Conn struct {
 // NewConn ..
 func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *Conn, err error) {
 	c := &Conn{
-		isRefreshing:  false,
-		refreshMutex:  new(sync.Mutex),
-		refreshWaiter: new(sync.WaitGroup),
-		conn:          conn,
-		dialer:        dialer,
-		credentials:   nethernet.Credentials{},
-		signals:       make(chan *nethernet.Signal),
-		doOnce:        new(sync.Once),
+		globalMutex:     new(sync.Mutex),
+		runningReadFunc: new(atomic.Int32),
+		conn:            conn,
+		dialer:          dialer,
+		credentials:     nethernet.Credentials{},
+		signals:         make(chan *nethernet.Signal),
+		doOnce:          new(sync.Once),
 	}
 
 	err = c.handleReady(ctx)
@@ -57,9 +56,12 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 		return nil, fmt.Errorf("NewConn: %v", err)
 	}
 
+	c.runningReadFunc.Add(1)
 	c.ctx, c.cancel = context.WithCancelCause(context.Background())
+
 	go c.read()
 	go c.ping()
+	go c.checkConn()
 	go c.autoRefresh(dialer.RefreshDuration)
 
 	return c, nil
@@ -97,16 +99,9 @@ func (c *Conn) read() {
 	for {
 		var message Message
 
-		err := wsjson.Read(context.Background(), c.conn, &message)
+		err := wsjson.Read(c.ctx, c.conn, &message)
 		if err != nil {
-			if c.refreshMutex.TryLock() {
-				c.cancel(err)
-				c.refreshMutex.Unlock()
-			} else if c.isRefreshing {
-				c.refreshWaiter.Done()
-			} else {
-				c.cancel(err)
-			}
+			c.runningReadFunc.Add(-1)
 			return
 		}
 		if EnableDebug {
@@ -115,9 +110,9 @@ func (c *Conn) read() {
 
 		switch message.From {
 		case "signalingServer":
-			c.refreshMutex.Lock()
+			c.globalMutex.Lock()
 			_ = json.Unmarshal([]byte(message.Data), &c.credentials)
-			c.refreshMutex.Unlock()
+			c.globalMutex.Unlock()
 		default:
 			signal := new(nethernet.Signal)
 			if err = signal.UnmarshalText([]byte(message.Data)); err != nil {
@@ -133,9 +128,15 @@ func (c *Conn) read() {
 
 // write ..
 func (c *Conn) write(m Message) error {
-	c.refreshMutex.Lock()
-	defer c.refreshMutex.Unlock()
-	return wsjson.Write(context.Background(), c.conn, m)
+	c.globalMutex.Lock()
+	defer c.globalMutex.Unlock()
+
+	err := wsjson.Write(c.ctx, c.conn, m)
+	if err != nil {
+		return fmt.Errorf("write: %v", err)
+	}
+
+	return nil
 }
 
 // ping ..
@@ -153,6 +154,80 @@ func (c *Conn) ping() {
 	}
 }
 
+// checkConn ..
+func (c *Conn) checkConn() {
+	for {
+		c.globalMutex.Lock()
+		if c.runningReadFunc.Load() == 0 {
+			c.globalMutex.Unlock()
+			c.Close()
+			return
+		}
+		c.globalMutex.Unlock()
+		time.Sleep(time.Second / 20)
+	}
+}
+
+// refreshConn ..
+func (c *Conn) refreshConn() (err error) {
+	var finalAddress string
+
+	for range DefaultRefreshRetryTimes {
+		tanLobbyRefreshResp, err := c.dialer.GetRefresh()
+		if err != nil {
+			continue
+		}
+		if !tanLobbyRefreshResp.Success {
+			c.cancel(fmt.Errorf("refreshConn: %v", tanLobbyRefreshResp.ErrorInfo))
+			return fmt.Errorf("refreshConn: %v", tanLobbyRefreshResp.ErrorInfo)
+		}
+		finalAddress = fmt.Sprintf(
+			"ws://%s/%d/%d/%s/%s",
+			c.dialer.ServerBaseAddress,
+			c.dialer.ClientNetherNetID,
+			c.dialer.G79UserUID,
+			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingSeed),
+			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingTicket),
+		)
+		break
+	}
+	if len(finalAddress) == 0 {
+		c.cancel(fmt.Errorf("refreshConn: %v", err))
+		return fmt.Errorf("refreshConn: %v", err)
+	}
+
+	c.globalMutex.Lock()
+	defer c.globalMutex.Unlock()
+	if EnableDebug || PrintRefreshInfo {
+		fmt.Println(time.Now(), "refreshConn: Start refresh")
+	}
+
+	_ = c.conn.Close(websocket.StatusNormalClosure, "")
+	for {
+		if c.runningReadFunc.Load() == 0 {
+			break
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	c.conn, _, err = websocket.Dial(ctx, finalAddress, c.dialer.Options)
+	if err != nil {
+		c.cancel(fmt.Errorf("refreshConn: %v", err))
+		return fmt.Errorf("refreshConn: %v", err)
+	}
+
+	c.credentials = nethernet.Credentials{}
+	if err = c.handleReady(ctx); err != nil {
+		c.cancel(fmt.Errorf("refreshConn: %v", err))
+		return fmt.Errorf("refreshConn: %v", err)
+	}
+
+	c.runningReadFunc.Add(1)
+	go c.read()
+	return nil
+}
+
 // autoRefresh ..
 func (c *Conn) autoRefresh(refreshDuration time.Duration) {
 	if refreshDuration == RefreshDurationDisable {
@@ -165,7 +240,7 @@ func (c *Conn) autoRefresh(refreshDuration time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			if c.RefreshConn() != nil {
+			if c.refreshConn() != nil {
 				return
 			}
 		case <-c.ctx.Done():
@@ -236,8 +311,8 @@ func (c *Conn) Notify(n nethernet.Notifier) (stop func()) {
 // does not support returning Credentials, it will return nil. Credentials are typically received
 // from a WebSocket connection. The [context.Context] may be used to cancel the blocking.
 func (c *Conn) Credentials(ctx context.Context) (*nethernet.Credentials, error) {
-	c.refreshMutex.Lock()
-	defer c.refreshMutex.Unlock()
+	c.globalMutex.Lock()
+	defer c.globalMutex.Unlock()
 	return &c.credentials, nil
 }
 
@@ -252,76 +327,10 @@ func (c *Conn) PongData(d []byte) {}
 
 // Close ..
 func (c *Conn) Close() {
-	c.refreshMutex.Lock()
-	defer c.refreshMutex.Unlock()
+	c.globalMutex.Lock()
+	defer c.globalMutex.Unlock()
 	c.doOnce.Do(func() {
 		_ = c.conn.Close(websocket.StatusNormalClosure, "")
-		c.cancel(fmt.Errorf("Close: Normal close"))
+		c.cancel(fmt.Errorf("Close: Use of closed network connection"))
 	})
-}
-
-// RefreshConn ..
-func (c *Conn) RefreshConn() (err error) {
-	var finalAddress string
-
-	for range DefaultRefreshRetryTimes {
-		tanLobbyRefreshResp, err := c.dialer.GetRefresh()
-		if err != nil {
-			continue
-		}
-		if !tanLobbyRefreshResp.Success {
-			c.cancel(fmt.Errorf("RefreshConn: %v", tanLobbyRefreshResp.ErrorInfo))
-			return fmt.Errorf("RefreshConn: %v", tanLobbyRefreshResp.ErrorInfo)
-		}
-		finalAddress = fmt.Sprintf(
-			"ws://%s/%d/%d/%s/%s",
-			c.dialer.ServerBaseAddress,
-			c.dialer.ClientNetherNetID,
-			c.dialer.G79UserUID,
-			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingSeed),
-			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingTicket),
-		)
-		break
-	}
-	if len(finalAddress) == 0 {
-		c.cancel(fmt.Errorf("RefreshConn: %v", err))
-		return fmt.Errorf("RefreshConn: %v", err)
-	}
-
-	c.refreshMutex.Lock()
-	defer func() {
-		c.isRefreshing = false
-		c.refreshMutex.Unlock()
-	}()
-
-	select {
-	case <-c.ctx.Done():
-		return fmt.Errorf("RefreshConn: Use of closed network connection")
-	default:
-	}
-	if EnableDebug || PrintRefreshInfo {
-		fmt.Println(time.Now(), "RefreshConn: Start refresh")
-	}
-
-	c.refreshWaiter.Add(1)
-	c.isRefreshing = true
-	_ = c.conn.Close(websocket.StatusNormalClosure, "")
-	c.refreshWaiter.Wait()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	c.conn, _, err = websocket.Dial(ctx, finalAddress, c.dialer.Options)
-	if err != nil {
-		c.cancel(fmt.Errorf("RefreshConn: %v", err))
-		return fmt.Errorf("RefreshConn: %v", err)
-	}
-
-	c.credentials = nethernet.Credentials{}
-	if err = c.handleReady(ctx); err != nil {
-		c.cancel(fmt.Errorf("RefreshConn: %v", err))
-		return fmt.Errorf("RefreshConn: %v", err)
-	}
-
-	go c.read()
-	return nil
 }

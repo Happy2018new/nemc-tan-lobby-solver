@@ -34,7 +34,7 @@ type Conn struct {
 
 	dialer      Dialer
 	credentials nethernet.Credentials
-	signals     chan *nethernet.Signal
+	messages    chan Message
 
 	doOnce *sync.Once
 }
@@ -47,7 +47,7 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 		conn:            conn,
 		dialer:          dialer,
 		credentials:     nethernet.Credentials{},
-		signals:         make(chan *nethernet.Signal),
+		messages:        make(chan Message),
 		doOnce:          new(sync.Once),
 	}
 
@@ -108,21 +108,7 @@ func (c *Conn) read() {
 			fmt.Printf("read: Read message %#v\n", message)
 		}
 
-		switch message.From {
-		case "signalingServer":
-			c.globalMutex.Lock()
-			_ = json.Unmarshal([]byte(message.Data), &c.credentials)
-			c.globalMutex.Unlock()
-		default:
-			signal := new(nethernet.Signal)
-			if err = signal.UnmarshalText([]byte(message.Data)); err != nil {
-				break
-			}
-			if signal.NetworkID, err = strconv.ParseUint(message.From, 10, 64); err != nil {
-				break
-			}
-			c.signals <- signal
-		}
+		c.messages <- message
 	}
 }
 
@@ -263,16 +249,16 @@ func (c *Conn) Signal(signal *nethernet.Signal) error {
 // ErrSignalingStopped will be notified to the Notifier, and the underlying negotiator should
 // handle the error by closing or returning.
 func (c *Conn) Notify(n nethernet.Notifier) (stop func()) {
+	mu := new(sync.Mutex)
 	queue := list.New()
-	queueMu := new(sync.Mutex)
 
 	go func() {
 		for {
 			select {
-			case signal := <-c.signals:
-				queueMu.Lock()
-				_ = queue.PushBack(signal)
-				queueMu.Unlock()
+			case message := <-c.messages:
+				mu.Lock()
+				_ = queue.PushBack(message)
+				mu.Unlock()
 			case <-c.ctx.Done():
 				n.NotifyError(nethernet.ErrSignalingStopped)
 				return
@@ -283,14 +269,32 @@ func (c *Conn) Notify(n nethernet.Notifier) (stop func()) {
 	go func() {
 		for {
 			if queue.Len() > 0 {
-				queueMu.Lock()
-				signals := make([]*nethernet.Signal, 0, queue.Len())
+				// Read message from queue
+				mu.Lock()
+				messages := make([]Message, 0, queue.Len())
 				for queue.Len() > 0 {
-					signals = append(signals, queue.Remove(queue.Front()).(*nethernet.Signal))
+					messages = append(messages, queue.Remove(queue.Front()).(Message))
 				}
-				queueMu.Unlock()
-				for _, signal := range signals {
-					n.NotifySignal(signal)
+				mu.Unlock()
+				// Handle message
+				for _, message := range messages {
+					switch message.From {
+					case "signalingServer":
+						c.globalMutex.Lock()
+						_ = json.Unmarshal([]byte(message.Data), &c.credentials)
+						c.globalMutex.Unlock()
+					default:
+						signal := new(nethernet.Signal)
+						err := signal.UnmarshalText([]byte(message.Data))
+						if err != nil {
+							break
+						}
+						signal.NetworkID, err = strconv.ParseUint(message.From, 10, 64)
+						if err != nil {
+							break
+						}
+						n.NotifySignal(signal)
+					}
 				}
 			}
 			select {

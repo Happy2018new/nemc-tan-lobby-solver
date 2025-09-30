@@ -186,7 +186,7 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp bunke
 	// Connect to websocket signaling server
 	wsConnection, err := signaling.Dialer{
 		Authenticator:     d.Authenticator,
-		RefreshDuration:   signaling.RefreshDurationDisable,
+		RefreshTime:       signaling.RefreshTimeDisbale,
 		G79UserUID:        tanLobbyLoginResp.UserUniqueID,
 		ServerBaseAddress: tanLobbyLoginResp.SignalingServerAddress,
 		ClientNetherNetID: d.clientNetherID,

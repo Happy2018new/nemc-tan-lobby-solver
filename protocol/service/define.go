@@ -1,5 +1,11 @@
 package service
 
+import (
+	"time"
+
+	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/service/signaling"
+)
+
 const (
 	RoomPrivacyEveryoneCanSee uint8 = iota
 	RoomPrivacyOnlyFriendsCanSee
@@ -17,6 +23,7 @@ type RoomConfig struct {
 	RoomName         string
 	RoomPasscode     string
 	RoomPrivacy      uint8
+	RoomRefreshTime  time.Duration
 	MaxPlayerCount   uint8
 	UsedModItemIDs   []uint64
 	PlayerPermission uint32
@@ -29,6 +36,7 @@ func DefaultRoomConfig(roomName string, roomPasscode string, maxPlayerCount uint
 		RoomName:         roomName,
 		RoomPasscode:     roomPasscode,
 		RoomPrivacy:      RoomPrivacyEveryoneCanSee,
+		RoomRefreshTime:  signaling.RefreshTimeDefault,
 		MaxPlayerCount:   maxPlayerCount,
 		UsedModItemIDs:   nil,
 		PlayerPermission: playerPermission,

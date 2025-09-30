@@ -217,7 +217,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 	// Connect to websocket signaling server
 	wsConnection, err := signaling.Dialer{
 		Authenticator:     l.Authenticator,
-		RefreshDuration:   signaling.DefaultRefreshDuration,
+		RefreshTime:       l.RoomRefreshTime,
 		G79UserUID:        tanLobbyCreateResp.UserUniqueID,
 		ServerBaseAddress: tanLobbyCreateResp.SignalingServerAddress,
 		ClientNetherNetID: l.serverNetherID,

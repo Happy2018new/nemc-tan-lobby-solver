@@ -19,7 +19,7 @@ import (
 
 const (
 	DefaultRefreshRetryTimes = 5
-	EnableDebug              = false
+	PrintDebugInfo           = false
 	PrintRefreshInfo         = true
 )
 
@@ -62,7 +62,7 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 	go c.read()
 	go c.ping()
 	go c.checkConn()
-	go c.autoRefresh(dialer.RefreshDuration)
+	go c.autoRefresh(dialer.RefreshTime)
 
 	return c, nil
 }
@@ -76,7 +76,7 @@ func (c *Conn) handleReady(ctx context.Context) error {
 		_ = c.conn.Close(websocket.StatusNormalClosure, "")
 		return fmt.Errorf("handleReady: %v", err)
 	}
-	if EnableDebug {
+	if PrintDebugInfo {
 		fmt.Printf("handleReady: Read message %#v\n", message)
 	}
 
@@ -104,7 +104,7 @@ func (c *Conn) read() {
 			c.readerCount.Add(-1)
 			return
 		}
-		if EnableDebug {
+		if PrintDebugInfo {
 			fmt.Printf("read: Read message %#v\n", message)
 		}
 
@@ -184,8 +184,11 @@ func (c *Conn) refreshConn() (err error) {
 
 	c.globalMutex.Lock()
 	defer c.globalMutex.Unlock()
-	if EnableDebug || PrintRefreshInfo {
-		fmt.Println(time.Now(), "refreshConn: Start refresh")
+	if PrintDebugInfo || PrintRefreshInfo {
+		fmt.Printf(
+			"[%s] refreshConn: Start refresh\n",
+			time.Now().Format("2006-01-02 15:04:05"),
+		)
 	}
 
 	_ = c.conn.Close(websocket.StatusNormalClosure, "")
@@ -215,12 +218,12 @@ func (c *Conn) refreshConn() (err error) {
 }
 
 // autoRefresh ..
-func (c *Conn) autoRefresh(refreshDuration time.Duration) {
-	if refreshDuration == RefreshDurationDisable {
+func (c *Conn) autoRefresh(refreshTime time.Duration) {
+	if refreshTime == RefreshTimeDisbale {
 		return
 	}
 
-	ticker := time.NewTicker(refreshDuration)
+	ticker := time.NewTicker(refreshTime)
 	defer ticker.Stop()
 
 	for {

@@ -13,15 +13,15 @@ import (
 )
 
 const (
-	RefreshDurationDisable = time.Duration(0)
-	DefaultRefreshDuration = time.Minute
+	RefreshTimeDisbale = time.Duration(0)
+	RefreshTimeDefault = time.Minute * 30
 )
 
 // Dialer ..
 type Dialer struct {
 	bunker.Authenticator
 	Options           *websocket.DialOptions
-	RefreshDuration   time.Duration
+	RefreshTime       time.Duration
 	G79UserUID        uint32
 	ServerBaseAddress string
 	ClientNetherNetID uint64

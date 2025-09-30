@@ -8,26 +8,27 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker"
 	"github.com/coder/websocket"
+)
+
+const (
+	RefreshDurationDisable = time.Duration(0)
+	DefaultRefreshDuration = time.Second * 5
 )
 
 // Dialer ..
 type Dialer struct {
-	Options       *websocket.DialOptions
-	NetworkID     uint64
-	serverAddress string
+	bunker.Authenticator
+	Options           *websocket.DialOptions
+	RefreshDuration   time.Duration
+	G79UserUID        uint32
+	ServerBaseAddress string
+	ClientNetherNetID uint64
 }
 
 // DialContext ..
-func (d Dialer) DialContext(
-	ctx context.Context,
-	refreshDuration time.Duration,
-	serverBaseAddress string,
-	clientNetherID uint64,
-	g79UserUID uint32,
-	signalingSeed []byte,
-	signalingTicket []byte,
-) (*Conn, error) {
+func (d Dialer) DialContext(ctx context.Context, signalingSeed []byte, signalingTicket []byte) (*Conn, error) {
 	if d.Options == nil {
 		d.Options = &websocket.DialOptions{}
 	}
@@ -38,24 +39,24 @@ func (d Dialer) DialContext(
 		d.Options.HTTPHeader = make(http.Header)
 		d.Options.HTTPHeader.Set("Authorization", "NeteaseSignalingAuthToken")
 	}
-	if d.NetworkID == 0 {
-		d.NetworkID = rand.Uint64()
+	if d.ClientNetherNetID == 0 {
+		d.ClientNetherNetID = rand.Uint64()
 	}
 
-	d.serverAddress = fmt.Sprintf(
+	finalAddress := fmt.Sprintf(
 		"ws://%s/%d/%d/%s/%s",
-		serverBaseAddress,
-		clientNetherID,
-		g79UserUID,
+		d.ServerBaseAddress,
+		d.ClientNetherNetID,
+		d.G79UserUID,
 		base64.URLEncoding.EncodeToString(signalingSeed),
 		base64.URLEncoding.EncodeToString(signalingTicket),
 	)
-	c, _, err := websocket.Dial(ctx, d.serverAddress, d.Options)
+	c, _, err := websocket.Dial(ctx, finalAddress, d.Options)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := NewConn(ctx, c, refreshDuration, d)
+	conn, err := NewConn(ctx, c, d)
 	if err != nil {
 		return nil, fmt.Errorf("DialContext: %v", err)
 	}

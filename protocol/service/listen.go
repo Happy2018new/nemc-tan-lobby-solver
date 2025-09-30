@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/nethernet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/encoding"
@@ -18,7 +18,7 @@ import (
 
 // ListenConfig ..
 type ListenConfig struct {
-	Authenticator
+	bunker.Authenticator
 	RoomConfig
 	serverNetherID    uint64
 	raknetConnection  net.Conn
@@ -26,7 +26,7 @@ type ListenConfig struct {
 }
 
 // Listen ..
-func Listen(roomConfig RoomConfig, authenticator Authenticator) (
+func Listen(roomConfig RoomConfig, authenticator bunker.Authenticator) (
 	listenConfig *ListenConfig,
 	listener *nethernet.Listener,
 	roomID uint32,
@@ -44,7 +44,7 @@ func Listen(roomConfig RoomConfig, authenticator Authenticator) (
 }
 
 // ListenContext ..
-func ListenContext(ctx context.Context, roomConfig RoomConfig, authenticator Authenticator) (
+func ListenContext(ctx context.Context, roomConfig RoomConfig, authenticator bunker.Authenticator) (
 	listenConfig *ListenConfig,
 	listener *nethernet.Listener,
 	roomID uint32,
@@ -64,7 +64,7 @@ func ListenContext(ctx context.Context, roomConfig RoomConfig, authenticator Aut
 // createTanLobbyRoom ..
 func (l *ListenConfig) createTanLobbyRoom(
 	ctx context.Context,
-	tanLobbyCreateResp auth.TanLobbyCreateResponse,
+	tanLobbyCreateResp bunker.TanLobbyCreateResponse,
 ) (
 	conn net.Conn,
 	enc *packet.Encoder,
@@ -216,13 +216,13 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 
 	// Connect to websocket signaling server
 	wsConnection, err := signaling.Dialer{
-		NetworkID: l.serverNetherID,
+		Authenticator:     l.Authenticator,
+		RefreshDuration:   signaling.DefaultRefreshDuration,
+		G79UserUID:        tanLobbyCreateResp.UserUniqueID,
+		ServerBaseAddress: tanLobbyCreateResp.SignalingServerAddress,
+		ClientNetherNetID: l.serverNetherID,
 	}.DialContext(
 		ctx,
-		time.Minute,
-		tanLobbyCreateResp.SignalingServerAddress,
-		l.serverNetherID,
-		tanLobbyCreateResp.UserUniqueID,
 		tanLobbyCreateResp.SignalingSeed,
 		tanLobbyCreateResp.SignalingTicket,
 	)

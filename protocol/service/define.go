@@ -1,7 +1,5 @@
 package service
 
-import "github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
-
 const (
 	RoomPrivacyEveryoneCanSee uint8 = iota
 	RoomPrivacyOnlyFriendsCanSee
@@ -13,12 +11,6 @@ const (
 	PlayerPermissionOperator
 	PlayerPermissionCustom
 )
-
-// Authenticator ..
-type Authenticator interface {
-	GetAccess(roomID string) (auth.TanLobbyLoginResponse, error)
-	GetCreate() (auth.TanLobbyCreateResponse, error)
-}
 
 // RoomConfig ..
 type RoomConfig struct {

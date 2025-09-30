@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/nethernet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/minecraft"
@@ -13,17 +13,9 @@ import (
 
 func main() {
 	if false {
-		client, err := auth.CreateClient(&auth.ClientOptions{
-			AuthServer: "AUTH SERVER ADDRESS",
-		})
-		if err != nil {
-			panic(err)
-		}
-		wrapper := auth.NewAccessWrapper(client, "YOUR FB TOKEN")
-
 		listenConfig, listener, roomID, err := service.Listen(
-			service.DefaultRoomConfig("来和我一起玩吧！", "", 10, service.PlayerPermissionMember),
-			wrapper,
+			service.DefaultRoomConfig("ROOM NAME", "", 10, service.PlayerPermissionMember),
+			bunker.NewAccessWrapper("AUTH SERVER ADDRESS", "YOUR FB TOKEN"),
 		)
 		if err != nil {
 			panic(err)
@@ -69,15 +61,11 @@ func main() {
 	}
 
 	if false {
-		client, err := auth.CreateClient(&auth.ClientOptions{
-			AuthServer: "http://127.0.0.1:80",
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		wrapper := auth.NewAccessWrapper(client, "YOUR FB TOKEN")
-		netConn, tanLobbyLoginResp, err := service.Dial("ROOM ID", "ROOM PASSCODE", wrapper)
+		netConn, tanLobbyLoginResp, err := service.Dial(
+			"ROOM ID",
+			"ROOM PASSCODE",
+			bunker.NewAccessWrapper("AUTH SERVER ADDRESS", "YOUR FB TOKEN"),
+		)
 		if err != nil {
 			panic(err)
 		}

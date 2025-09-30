@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker/auth"
+	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/nethernet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/core/raknet"
 	"github.com/Happy2018new/nemc-tan-lobby-solver/protocol/packet"
@@ -18,20 +18,20 @@ import (
 
 // Dialer ..
 type Dialer struct {
-	Authenticator
+	bunker.Authenticator
 	RoomID         string
 	RoomPasscode   string
 	clientNetherID uint64
 }
 
 // Dial ..
-func Dial(roomID string, roomPasscode string, authenticator Authenticator) (net.Conn, auth.TanLobbyLoginResponse, error) {
+func Dial(roomID string, roomPasscode string, authenticator bunker.Authenticator) (net.Conn, bunker.TanLobbyLoginResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
 	conn, tanLobbyLoginResp, err := DialContext(ctx, roomID, roomPasscode, authenticator)
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("Dial: %v", err)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("Dial: %v", err)
 	}
 
 	return conn, tanLobbyLoginResp, nil
@@ -42,8 +42,8 @@ func DialContext(
 	ctx context.Context,
 	roomID string,
 	roomPasscode string,
-	authenticator Authenticator,
-) (net.Conn, auth.TanLobbyLoginResponse, error) {
+	authenticator bunker.Authenticator,
+) (net.Conn, bunker.TanLobbyLoginResponse, error) {
 	dialer := Dialer{
 		Authenticator: authenticator,
 		RoomID:        roomID,
@@ -51,13 +51,13 @@ func DialContext(
 	}
 	conn, tanLobbyLoginResp, err := dialer.DialContext(ctx)
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
 	return conn, tanLobbyLoginResp, nil
 }
 
 // enterTanLobbyRoom ..
-func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.TanLobbyLoginResponse) (
+func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp bunker.TanLobbyLoginResponse) (
 	remoteNetherNetID uint64,
 	err error,
 ) {
@@ -167,36 +167,36 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp auth.T
 }
 
 // DialContext ..
-func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.TanLobbyLoginResponse, err error) {
+func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp bunker.TanLobbyLoginResponse, err error) {
 	// First we query room info
 	tanLobbyLoginResp, err := d.Authenticator.GetAccess(d.RoomID)
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
 	if !tanLobbyLoginResp.Success {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", tanLobbyLoginResp.ErrorInfo)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", tanLobbyLoginResp.ErrorInfo)
 	}
 
 	// Then Enter tan lobby room
 	remoteNetherNetID, err := d.enterTanLobbyRoom(ctx, tanLobbyLoginResp)
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
 
 	// Connect to websocket signaling server
 	wsConnection, err := signaling.Dialer{
-		NetworkID: d.clientNetherID,
+		Authenticator:     d.Authenticator,
+		RefreshDuration:   signaling.RefreshDurationDisable,
+		G79UserUID:        tanLobbyLoginResp.UserUniqueID,
+		ServerBaseAddress: tanLobbyLoginResp.SignalingServerAddress,
+		ClientNetherNetID: d.clientNetherID,
 	}.DialContext(
 		ctx,
-		0,
-		tanLobbyLoginResp.SignalingServerAddress,
-		d.clientNetherID,
-		tanLobbyLoginResp.UserUniqueID,
 		tanLobbyLoginResp.SignalingSeed,
 		tanLobbyLoginResp.SignalingTicket,
 	)
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
 	defer wsConnection.Close()
 
@@ -207,7 +207,7 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.
 		wsConnection,
 	)
 	if err != nil {
-		return nil, auth.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
+		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
 
 	// Return

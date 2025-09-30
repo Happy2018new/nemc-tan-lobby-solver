@@ -1,9 +1,10 @@
-package auth
+package bunker
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 )
 
 // PhoenixSkinInfo ..
@@ -46,16 +47,16 @@ type TanLobbyLoginResponse struct {
 	SignalingTicket        []byte `json:"signaling_ticket"`
 }
 
-func (client *Client) Auth(roomID string, fbtoken string) (TanLobbyLoginResponse, error) {
+func (client *Client) Auth(roomID string) (TanLobbyLoginResponse, error) {
 	// Pack request
 	request := TanLobbyLoginRequest{
-		FBToken: fbtoken,
+		FBToken: client.FBToken,
 		RoomID:  roomID,
 	}
 	requestJsonBytes, _ := json.Marshal(request)
 
 	// Post request
-	resp, err := client.client.Post(
+	resp, err := http.Post(
 		fmt.Sprintf("%s/api/phoenix/tan_lobby_login", client.AuthServer),
 		"application/json",
 		bytes.NewBuffer(requestJsonBytes),
@@ -65,7 +66,7 @@ func (client *Client) Auth(roomID string, fbtoken string) (TanLobbyLoginResponse
 	}
 
 	// Parse response
-	tanLobbyLoginResp, err := assertAndParse[TanLobbyLoginResponse](resp)
+	tanLobbyLoginResp, err := parseHttpResponse[TanLobbyLoginResponse](resp)
 	if err != nil {
 		return TanLobbyLoginResponse{}, fmt.Errorf("Auth: %v", err)
 	}
@@ -98,15 +99,15 @@ type TanLobbyCreateResponse struct {
 	SignalingTicket        []byte `json:"signaling_ticket"`
 }
 
-func (client *Client) TanLobbyCreate(fbtoken string) (TanLobbyCreateResponse, error) {
+func (client *Client) TanLobbyCreate() (TanLobbyCreateResponse, error) {
 	// Pack request
 	request := TanLobbyCreateRequest{
-		FBToken: fbtoken,
+		FBToken: client.FBToken,
 	}
 	requestJsonBytes, _ := json.Marshal(request)
 
 	// Post request
-	resp, err := client.client.Post(
+	resp, err := http.Post(
 		fmt.Sprintf("%s/api/phoenix/tan_lobby_create", client.AuthServer),
 		"application/json",
 		bytes.NewBuffer(requestJsonBytes),
@@ -116,11 +117,51 @@ func (client *Client) TanLobbyCreate(fbtoken string) (TanLobbyCreateResponse, er
 	}
 
 	// Parse response
-	tanLobbyCreateResp, err := assertAndParse[TanLobbyCreateResponse](resp)
+	tanLobbyCreateResp, err := parseHttpResponse[TanLobbyCreateResponse](resp)
 	if err != nil {
 		return TanLobbyCreateResponse{}, fmt.Errorf("TanLobbyCreate: %v", err)
 	}
 
 	// Return
 	return tanLobbyCreateResp, nil
+}
+
+// TanLobbyRefreshRequest ..
+type TanLobbyRefreshRequest struct {
+	FBToken string `json:"login_token"`
+}
+
+// TanLobbyRefreshResponse ..
+type TanLobbyRefreshResponse struct {
+	Success         bool   `json:"success"`
+	ErrorInfo       string `json:"error_info"`
+	SignalingSeed   []byte `json:"signaling_seed"`
+	SignalingTicket []byte `json:"signaling_ticket"`
+}
+
+func (client *Client) TanLobbyRefresh() (TanLobbyRefreshResponse, error) {
+	// Pack request
+	request := TanLobbyRefreshRequest{
+		FBToken: client.FBToken,
+	}
+	requestJsonBytes, _ := json.Marshal(request)
+
+	// Post request
+	resp, err := http.Post(
+		fmt.Sprintf("%s/api/phoenix/tan_lobby_refresh", client.AuthServer),
+		"application/json",
+		bytes.NewBuffer(requestJsonBytes),
+	)
+	if err != nil {
+		return TanLobbyRefreshResponse{}, fmt.Errorf("TanLobbyRefresh: %v", err)
+	}
+
+	// Parse response
+	tanLobbyRefreshResp, err := parseHttpResponse[TanLobbyRefreshResponse](resp)
+	if err != nil {
+		return TanLobbyRefreshResponse{}, fmt.Errorf("TanLobbyRefresh: %v", err)
+	}
+
+	// Return
+	return tanLobbyRefreshResp, nil
 }

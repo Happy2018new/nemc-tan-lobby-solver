@@ -25,8 +25,8 @@ const (
 
 // Conn ..
 type Conn struct {
-	globalMutex     *sync.Mutex
-	runningReadFunc *atomic.Int32
+	globalMutex *sync.Mutex
+	readerCount *atomic.Int32
 
 	conn   *websocket.Conn
 	ctx    context.Context
@@ -42,13 +42,13 @@ type Conn struct {
 // NewConn ..
 func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *Conn, err error) {
 	c := &Conn{
-		globalMutex:     new(sync.Mutex),
-		runningReadFunc: new(atomic.Int32),
-		conn:            conn,
-		dialer:          dialer,
-		credentials:     nethernet.Credentials{},
-		messages:        make(chan Message),
-		doOnce:          new(sync.Once),
+		globalMutex: new(sync.Mutex),
+		readerCount: new(atomic.Int32),
+		conn:        conn,
+		dialer:      dialer,
+		credentials: nethernet.Credentials{},
+		messages:    make(chan Message),
+		doOnce:      new(sync.Once),
 	}
 
 	err = c.handleReady(ctx)
@@ -56,7 +56,7 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 		return nil, fmt.Errorf("NewConn: %v", err)
 	}
 
-	c.runningReadFunc.Add(1)
+	c.readerCount.Add(1)
 	c.ctx, c.cancel = context.WithCancelCause(context.Background())
 
 	go c.read()
@@ -101,7 +101,7 @@ func (c *Conn) read() {
 
 		err := wsjson.Read(c.ctx, c.conn, &message)
 		if err != nil {
-			c.runningReadFunc.Add(-1)
+			c.readerCount.Add(-1)
 			return
 		}
 		if EnableDebug {
@@ -144,7 +144,7 @@ func (c *Conn) ping() {
 func (c *Conn) checkConn() {
 	for {
 		c.globalMutex.Lock()
-		if c.runningReadFunc.Load() == 0 {
+		if c.readerCount.Load() == 0 {
 			c.globalMutex.Unlock()
 			c.Close()
 			return
@@ -190,7 +190,7 @@ func (c *Conn) refreshConn() (err error) {
 
 	_ = c.conn.Close(websocket.StatusNormalClosure, "")
 	for {
-		if c.runningReadFunc.Load() == 0 {
+		if c.readerCount.Load() == 0 {
 			break
 		}
 	}
@@ -209,7 +209,7 @@ func (c *Conn) refreshConn() (err error) {
 		return fmt.Errorf("refreshConn: %v", err)
 	}
 
-	c.runningReadFunc.Add(1)
+	c.readerCount.Add(1)
 	go c.read()
 	return nil
 }

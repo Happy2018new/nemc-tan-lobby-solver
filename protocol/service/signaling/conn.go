@@ -268,6 +268,9 @@ func (c *Conn) RefreshConn() (err error) {
 		return fmt.Errorf("RefreshConn: Use of closed network connection")
 	default:
 	}
+	if EnableDebug {
+		fmt.Println("RefreshConn: Start refresh")
+	}
 
 	c.refreshWaiter.Add(1)
 	c.isRefreshing = true

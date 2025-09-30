@@ -18,7 +18,7 @@ import (
 
 const (
 	DefaultRefreshRetryTimes = 5
-	EnableDebug              = true
+	EnableDebug              = false
 )
 
 // Conn ..
@@ -154,7 +154,7 @@ func (c *Conn) ping() {
 
 // autoRefresh ..
 func (c *Conn) autoRefresh(refreshDuration time.Duration) {
-	if refreshDuration == 0 {
+	if refreshDuration == RefreshDurationDisable {
 		return
 	}
 

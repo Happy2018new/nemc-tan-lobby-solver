@@ -14,7 +14,7 @@ import (
 
 const (
 	RefreshDurationDisable = time.Duration(0)
-	DefaultRefreshDuration = time.Second * 5
+	DefaultRefreshDuration = time.Minute
 )
 
 // Dialer ..

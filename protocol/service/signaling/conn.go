@@ -19,6 +19,7 @@ import (
 const (
 	DefaultRefreshRetryTimes = 5
 	EnableDebug              = false
+	PrintRefreshInfo         = true
 )
 
 // Conn ..
@@ -261,6 +262,32 @@ func (c *Conn) Close() {
 
 // RefreshConn ..
 func (c *Conn) RefreshConn() (err error) {
+	var finalAddress string
+
+	for range DefaultRefreshRetryTimes {
+		tanLobbyRefreshResp, err := c.dialer.GetRefresh()
+		if err != nil {
+			continue
+		}
+		if !tanLobbyRefreshResp.Success {
+			c.cancel(fmt.Errorf("RefreshConn: %v", tanLobbyRefreshResp.ErrorInfo))
+			return fmt.Errorf("RefreshConn: %v", tanLobbyRefreshResp.ErrorInfo)
+		}
+		finalAddress = fmt.Sprintf(
+			"ws://%s/%d/%d/%s/%s",
+			c.dialer.ServerBaseAddress,
+			c.dialer.ClientNetherNetID,
+			c.dialer.G79UserUID,
+			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingSeed),
+			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingTicket),
+		)
+		break
+	}
+	if len(finalAddress) == 0 {
+		c.cancel(fmt.Errorf("RefreshConn: %v", err))
+		return fmt.Errorf("RefreshConn: %v", err)
+	}
+
 	c.refreshMutex.Lock()
 	defer func() {
 		c.isRefreshing = false
@@ -272,8 +299,8 @@ func (c *Conn) RefreshConn() (err error) {
 		return fmt.Errorf("RefreshConn: Use of closed network connection")
 	default:
 	}
-	if EnableDebug {
-		fmt.Println("RefreshConn: Start refresh")
+	if EnableDebug || PrintRefreshInfo {
+		fmt.Println(time.Now(), "RefreshConn: Start refresh")
 	}
 
 	c.refreshWaiter.Add(1)
@@ -281,38 +308,20 @@ func (c *Conn) RefreshConn() (err error) {
 	_ = c.conn.Close(websocket.StatusNormalClosure, "")
 	c.refreshWaiter.Wait()
 
-	for range DefaultRefreshRetryTimes {
-		tanLobbyRefreshResp, err := c.dialer.GetRefresh()
-		if err != nil {
-			continue
-		}
-		newAddress := fmt.Sprintf(
-			"ws://%s/%d/%d/%s/%s",
-			c.dialer.ServerBaseAddress,
-			c.dialer.ClientNetherNetID,
-			c.dialer.G79UserUID,
-			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingSeed),
-			base64.URLEncoding.EncodeToString(tanLobbyRefreshResp.SignalingTicket),
-		)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-		defer cancel()
-		c.conn, _, err = websocket.Dial(ctx, newAddress, c.dialer.Options)
-		if err != nil {
-			c.cancel(fmt.Errorf("RefreshConn: %v", err))
-			return fmt.Errorf("RefreshConn: %v", err)
-		}
-
-		c.credentials = nethernet.Credentials{}
-		if err = c.handleReady(ctx); err != nil {
-			c.cancel(fmt.Errorf("RefreshConn: %v", err))
-			return fmt.Errorf("RefreshConn: %v", err)
-		}
-
-		go c.read()
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	c.conn, _, err = websocket.Dial(ctx, finalAddress, c.dialer.Options)
+	if err != nil {
+		c.cancel(fmt.Errorf("RefreshConn: %v", err))
+		return fmt.Errorf("RefreshConn: %v", err)
 	}
 
-	c.cancel(fmt.Errorf("RefreshConn: %v", err))
-	return fmt.Errorf("RefreshConn: %v", err)
+	c.credentials = nethernet.Credentials{}
+	if err = c.handleReady(ctx); err != nil {
+		c.cancel(fmt.Errorf("RefreshConn: %v", err))
+		return fmt.Errorf("RefreshConn: %v", err)
+	}
+
+	go c.read()
+	return nil
 }

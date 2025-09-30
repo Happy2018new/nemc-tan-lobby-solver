@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -20,6 +21,7 @@ type Dialer struct {
 // DialContext ..
 func (d Dialer) DialContext(
 	ctx context.Context,
+	refreshDuration time.Duration,
 	serverBaseAddress string,
 	clientNetherID uint64,
 	g79UserUID uint32,
@@ -53,7 +55,7 @@ func (d Dialer) DialContext(
 		return nil, err
 	}
 
-	conn, err := NewConn(ctx, c, d)
+	conn, err := NewConn(ctx, c, refreshDuration, d)
 	if err != nil {
 		return nil, fmt.Errorf("DialContext: %v", err)
 	}

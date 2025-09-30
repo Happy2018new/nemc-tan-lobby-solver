@@ -188,6 +188,7 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp auth.
 		NetworkID: d.clientNetherID,
 	}.DialContext(
 		ctx,
+		0,
 		tanLobbyLoginResp.SignalingServerAddress,
 		d.clientNetherID,
 		tanLobbyLoginResp.UserUniqueID,

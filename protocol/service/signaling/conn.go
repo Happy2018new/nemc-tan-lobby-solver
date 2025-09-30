@@ -15,13 +15,13 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-const EnableDebug = true
+const EnableDebug = false
 
 // Conn ..
 type Conn struct {
+	isRefreshing  bool
 	refreshMutex  *sync.Mutex
 	refreshWaiter *sync.WaitGroup
-	isRefreshing  bool
 
 	conn   *websocket.Conn
 	ctx    context.Context
@@ -35,11 +35,11 @@ type Conn struct {
 }
 
 // NewConn ..
-func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *Conn, err error) {
+func NewConn(ctx context.Context, conn *websocket.Conn, refreshDuration time.Duration, dialer Dialer) (result *Conn, err error) {
 	c := &Conn{
+		isRefreshing:  false,
 		refreshMutex:  new(sync.Mutex),
 		refreshWaiter: new(sync.WaitGroup),
-		isRefreshing:  false,
 		conn:          conn,
 		dialer:        dialer,
 		credentials:   nethernet.Credentials{},
@@ -55,7 +55,7 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 	c.ctx, c.cancel = context.WithCancelCause(context.Background())
 	go c.read()
 	go c.ping()
-	go c.autoRefresh()
+	go c.autoRefresh(refreshDuration)
 
 	return c, nil
 }
@@ -149,8 +149,12 @@ func (c *Conn) ping() {
 }
 
 // autoRefresh ..
-func (c *Conn) autoRefresh() {
-	ticker := time.NewTicker(time.Second * 60)
+func (c *Conn) autoRefresh(refreshDuration time.Duration) {
+	if refreshDuration == 0 {
+		return
+	}
+
+	ticker := time.NewTicker(refreshDuration)
 	defer ticker.Stop()
 
 	for {

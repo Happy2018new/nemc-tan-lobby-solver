@@ -219,6 +219,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 		NetworkID: l.serverNetherID,
 	}.DialContext(
 		ctx,
+		time.Minute,
 		tanLobbyCreateResp.SignalingServerAddress,
 		l.serverNetherID,
 		tanLobbyCreateResp.UserUniqueID,

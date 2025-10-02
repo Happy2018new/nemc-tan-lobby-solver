@@ -53,8 +53,8 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 		return nil, fmt.Errorf("NewConn: %v", ctx.Err())
 	case <-c.ctx.Done():
 		return nil, fmt.Errorf("NewConn: %v", c.ctx.Err())
-	case credential := <-c.credentials:
-		c.credentials <- credential
+	case credentials := <-c.credentials:
+		c.credentials <- credentials
 		go c.autoRefresh(dialer.RefreshTime)
 		return c, nil
 	}
@@ -75,13 +75,13 @@ func (c *Conn) read() {
 
 		switch message.From {
 		case "signalingServer":
-			var credential nethernet.Credentials
-			if err := json.Unmarshal([]byte(message.Data), &credential); err != nil {
+			var credentials nethernet.Credentials
+			if err := json.Unmarshal([]byte(message.Data), &credentials); err != nil {
 				c.Close(fmt.Errorf("read: %v", err))
 				return
 			}
 			select {
-			case c.credentials <- credential:
+			case c.credentials <- credentials:
 			default:
 				c.Close(fmt.Errorf("read: Should never happened"))
 				return
@@ -148,13 +148,13 @@ func (c *Conn) refreshCredentials() (err error) {
 		return
 	}
 
-	c.write(Message{Type: MessageTypeClientRequestCredential})
+	c.write(Message{Type: MessageTypeClientRequestCredentials})
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*30)
 	defer cancel()
 
 	select {
-	case credential := <-c.credentials:
-		c.credentials <- credential
+	case credentials := <-c.credentials:
+		c.credentials <- credentials
 		return nil
 	case <-ctx.Done():
 		err = fmt.Errorf("refreshCredentials: Refresh timeout")
@@ -228,9 +228,12 @@ func (c *Conn) Credentials(ctx context.Context) (*nethernet.Credentials, error) 
 	defer c.mu.Unlock()
 
 	select {
-	case credential := <-c.credentials:
-		c.credentials <- credential
-		return &credential, nil
+	case credentials := <-c.credentials:
+		c.credentials <- credentials
+		return &credentials, nil
+	case <-ctx.Done():
+		c.Close(fmt.Errorf("Credentials: %v", ctx.Err()))
+		return nil, fmt.Errorf("Credentials: %v", ctx.Err())
 	case <-c.ctx.Done():
 		return nil, fmt.Errorf("Credentials: %v", c.ctx.Err())
 	}

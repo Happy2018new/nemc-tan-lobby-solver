@@ -32,8 +32,8 @@ type Conn struct {
 	doOnce      *sync.Once
 }
 
-// NewConn ..
-func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *Conn, err error) {
+// newConn ..
+func newConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *Conn, err error) {
 	c := &Conn{
 		mu:          new(sync.Mutex),
 		dialer:      dialer,
@@ -49,10 +49,10 @@ func NewConn(ctx context.Context, conn *websocket.Conn, dialer Dialer) (result *
 
 	select {
 	case <-ctx.Done():
-		c.Close(fmt.Errorf("NewConn: %v", ctx.Err()))
-		return nil, fmt.Errorf("NewConn: %v", ctx.Err())
+		c.Close(fmt.Errorf("newConn: %v", ctx.Err()))
+		return nil, fmt.Errorf("newConn: %v", ctx.Err())
 	case <-c.ctx.Done():
-		return nil, fmt.Errorf("NewConn: %v", c.ctx.Err())
+		return nil, fmt.Errorf("newConn: %v", c.ctx.Err())
 	case credentials := <-c.credentials:
 		c.credentials <- credentials
 		go c.autoRefresh(dialer.RefreshTime)

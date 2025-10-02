@@ -56,7 +56,7 @@ func (d Dialer) DialContext(ctx context.Context, signalingSeed []byte, signaling
 		return nil, err
 	}
 
-	conn, err := NewConn(ctx, c, d)
+	conn, err := newConn(ctx, c, d)
 	if err != nil {
 		return nil, fmt.Errorf("DialContext: %v", err)
 	}

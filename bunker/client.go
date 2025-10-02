@@ -8,14 +8,18 @@ import (
 )
 
 type Client struct {
-	AuthServer string
-	FBToken    string
+	AuthServer         string
+	FBToken            string
+	ProvidedPEAuthData string
+	ProvidedSaAuthData string
 }
 
-func NewClient(authServer string, token string) *Client {
+func NewClient(authServer string, token string, peAuth string, saAuth string) *Client {
 	return &Client{
-		AuthServer: authServer,
-		FBToken:    token,
+		AuthServer:         authServer,
+		FBToken:            token,
+		ProvidedPEAuthData: peAuth,
+		ProvidedSaAuthData: saAuth,
 	}
 }
 

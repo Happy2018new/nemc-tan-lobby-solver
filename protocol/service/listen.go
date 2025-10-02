@@ -247,7 +247,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 	l.netherNetListener, err = listenConfig.Listen(wsConnection)
 	if err != nil {
 		_ = l.raknetConnection.Close()
-		wsConnection.Close()
+		wsConnection.Close(fmt.Errorf("ListenContext: %v", err))
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
 

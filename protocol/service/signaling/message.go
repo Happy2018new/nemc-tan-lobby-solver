@@ -5,6 +5,7 @@ import "encoding/json"
 const (
 	MessageTypeClientRequestPing uint32 = iota
 	MessageTypeClientSendSignal
+	MessageTypeClientRequestCredential
 )
 
 // Message ..

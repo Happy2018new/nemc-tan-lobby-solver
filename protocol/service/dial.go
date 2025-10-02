@@ -198,7 +198,7 @@ func (d *Dialer) DialContext(ctx context.Context) (conn net.Conn, authResp bunke
 	if err != nil {
 		return nil, bunker.TanLobbyLoginResponse{}, fmt.Errorf("DialContext: %v", err)
 	}
-	defer wsConnection.Close()
+	defer wsConnection.Close(fmt.Errorf("DialContext: Close as expected (this error can ignore)"))
 
 	// At last we can connect to remote room
 	conn, err = nethernet.Dialer{}.DialContext(

@@ -232,7 +232,6 @@ func (c *Conn) Credentials(ctx context.Context) (*nethernet.Credentials, error) 
 		c.credentials <- credentials
 		return &credentials, nil
 	case <-ctx.Done():
-		c.Close(fmt.Errorf("Credentials: %v", ctx.Err()))
 		return nil, fmt.Errorf("Credentials: %v", ctx.Err())
 	case <-c.ctx.Done():
 		return nil, fmt.Errorf("Credentials: %v", c.ctx.Err())

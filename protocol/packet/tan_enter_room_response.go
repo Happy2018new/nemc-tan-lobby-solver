@@ -26,9 +26,8 @@ func (*TanEnterRoomResponse) BoundType() uint8 {
 
 func (t *TanEnterRoomResponse) Marshal(io encoding.IO) {
 	io.Int8(&t.ErrorCode)
-	if t.ErrorCode != TanEnterRoomSuccess {
-		return
+	if t.ErrorCode == TanEnterRoomSuccess {
+		encoding.FuncSliceUint8Length(io, &t.PlayerIDList, io.Uint32)
+		encoding.FuncSliceUint8Length(io, &t.ItemIDs, io.Uint64)
 	}
-	encoding.FuncSliceUint8Length(io, &t.PlayerIDList, io.Uint32)
-	encoding.FuncSliceUint8Length(io, &t.ItemIDs, io.Uint64)
 }

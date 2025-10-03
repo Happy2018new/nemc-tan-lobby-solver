@@ -23,8 +23,7 @@ func (*TanCreateRoomResponse) BoundType() uint8 {
 
 func (t *TanCreateRoomResponse) Marshal(io encoding.IO) {
 	io.Int8(&t.ErrorCode)
-	if t.ErrorCode != TanCreateRoomSuccess {
-		return
+	if t.ErrorCode == TanCreateRoomSuccess {
+		io.Uint32(&t.RoomID)
 	}
-	io.Uint32(&t.RoomID)
 }

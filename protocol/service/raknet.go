@@ -14,12 +14,10 @@ import (
 func readPacketWithContext(ctx context.Context, conn net.Conn, decoder *packet.Decoder) (packet.Packet, error) {
 	pkChannel := make(chan packet.Packet, 1)
 	errChannel := make(chan error, 1)
+	defer close(pkChannel)
+	defer close(errChannel)
 
 	go func() {
-		defer func() {
-			close(pkChannel)
-			close(errChannel)
-		}()
 		pk, err := readPacket(decoder)
 		if err != nil {
 			errChannel <- err

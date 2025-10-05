@@ -180,7 +180,7 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 	var dec *packet.Decoder
 	l.serverNetherID = rand.Uint64()
 
-	// First we query room info
+	// Get room create info
 	tanLobbyCreateResp, err := l.Authenticator.GetCreate()
 	if err != nil {
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
@@ -216,13 +216,13 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 
 	// Connect to websocket signaling server
 	wsConnection, err := signaling.Dialer{
-		Authenticator:     l.Authenticator,
-		RefreshTime:       l.RoomRefreshTime,
-		G79UserUID:        tanLobbyCreateResp.UserUniqueID,
-		ServerBaseAddress: tanLobbyCreateResp.SignalingServerAddress,
-		ClientNetherNetID: l.serverNetherID,
+		Authenticator: l.Authenticator,
+		RefreshTime:   l.RoomRefreshTime,
+		NetherNetID:   l.serverNetherID,
 	}.DialContext(
 		ctx,
+		tanLobbyCreateResp.SignalingServerAddress,
+		tanLobbyCreateResp.UserUniqueID,
 		tanLobbyCreateResp.SignalingSeed,
 		tanLobbyCreateResp.SignalingTicket,
 	)

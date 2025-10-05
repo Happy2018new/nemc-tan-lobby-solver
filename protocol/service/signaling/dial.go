@@ -20,15 +20,19 @@ const (
 // Dialer ..
 type Dialer struct {
 	bunker.Authenticator
-	Options           *websocket.DialOptions
-	RefreshTime       time.Duration
-	G79UserUID        uint32
-	ServerBaseAddress string
-	ClientNetherNetID uint64
+	Options     *websocket.DialOptions
+	RefreshTime time.Duration
+	NetherNetID uint64
 }
 
 // DialContext ..
-func (d Dialer) DialContext(ctx context.Context, signalingSeed []byte, signalingTicket []byte) (*Conn, error) {
+func (d Dialer) DialContext(
+	ctx context.Context,
+	serverBaseAddress string,
+	g79UserUID uint32,
+	signalingSeed []byte,
+	signalingTicket []byte,
+) (*Conn, error) {
 	if d.Options == nil {
 		d.Options = &websocket.DialOptions{}
 	}
@@ -39,15 +43,15 @@ func (d Dialer) DialContext(ctx context.Context, signalingSeed []byte, signaling
 		d.Options.HTTPHeader = make(http.Header)
 		d.Options.HTTPHeader.Set("Authorization", "NeteaseSignalingAuthToken")
 	}
-	if d.ClientNetherNetID == 0 {
-		d.ClientNetherNetID = rand.Uint64()
+	if d.NetherNetID == 0 {
+		d.NetherNetID = rand.Uint64()
 	}
 
 	finalAddress := fmt.Sprintf(
 		"ws://%s/%d/%d/%s/%s",
-		d.ServerBaseAddress,
-		d.ClientNetherNetID,
-		d.G79UserUID,
+		serverBaseAddress,
+		d.NetherNetID,
+		g79UserUID,
 		base64.URLEncoding.EncodeToString(signalingSeed),
 		base64.URLEncoding.EncodeToString(signalingTicket),
 	)

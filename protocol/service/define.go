@@ -23,6 +23,7 @@ type RoomConfig struct {
 	RoomName         string
 	RoomPasscode     string
 	RoomPrivacy      uint8
+	RoomTagList      []uint8
 	RoomRefreshTime  time.Duration
 	MaxPlayerCount   uint8
 	UsedModItemIDs   []uint64
@@ -36,6 +37,7 @@ func DefaultRoomConfig(roomName string, roomPasscode string, maxPlayerCount uint
 		RoomName:         roomName,
 		RoomPasscode:     roomPasscode,
 		RoomPrivacy:      RoomPrivacyEveryoneCanSee,
+		RoomTagList:      nil,
 		RoomRefreshTime:  signaling.RefreshTimeDefault,
 		MaxPlayerCount:   maxPlayerCount,
 		UsedModItemIDs:   nil,

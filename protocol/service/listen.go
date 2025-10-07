@@ -171,6 +171,39 @@ func (l *ListenConfig) createTanLobbyRoom(
 		return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to create tan lobby room (code = %d)", tanCreateRoomResp.ErrorCode)
 	}
 
+	// Set room tag if needed
+	if len(l.RoomConfig.RoomTagList) > 0 {
+		err = writePacket(enc, &packet.TanSetTagListRequest{
+			TagList: l.RoomConfig.RoomTagList,
+		})
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
+		}
+
+		// Read set tag list response
+		pk, err = readPacketWithContext(ctx, conn, dec)
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
+		}
+		tanSetTagListResp, ok := pk.(*packet.TanSetTagListResponse)
+		if !ok {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanSetTagListResponse, but got %#v", pk)
+		}
+
+		// Handle set tag list response
+		if tanSetTagListResp.ErrorCode == packet.TanSetTagListExceedLimit {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only set up to 2 tags")
+		}
+		if tanSetTagListResp.ErrorCode != packet.TanSetTagListSuccess {
+			_ = conn.Close()
+			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to set room tags (code = %d)", tanSetTagListResp.ErrorCode)
+		}
+	}
+
 	// Return
 	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
 }

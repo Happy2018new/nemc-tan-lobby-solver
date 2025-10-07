@@ -173,34 +173,51 @@ func (l *ListenConfig) createTanLobbyRoom(
 
 	// Set room tag if needed
 	if len(l.RoomConfig.RoomTagList) > 0 {
-		err = writePacket(enc, &packet.TanSetTagListRequest{
-			TagList: l.RoomConfig.RoomTagList,
-		})
-		if err != nil {
+		if err = writePacket(enc, &packet.TanSetTagListRequest{TagList: l.RoomConfig.RoomTagList}); err != nil {
 			_ = conn.Close()
 			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 		}
+		for {
+			// Prepare
+			shouldRepeat := true
 
-		// Read set tag list response
-		pk, err = readPacketWithContext(ctx, conn, dec)
-		if err != nil {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
-		}
-		tanSetTagListResp, ok := pk.(*packet.TanSetTagListResponse)
-		if !ok {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Expect the incoming packet is *packet.TanSetTagListResponse, but got %#v", pk)
-		}
+			// Read set tag list response
+			pk, err = readPacketWithContext(ctx, conn, dec)
+			if err != nil {
+				_ = conn.Close()
+				return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
+			}
 
-		// Handle set tag list response
-		if tanSetTagListResp.ErrorCode == packet.TanSetTagListExceedLimit {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only set up to 2 tags")
-		}
-		if tanSetTagListResp.ErrorCode != packet.TanSetTagListSuccess {
-			_ = conn.Close()
-			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to set room tags (code = %d)", tanSetTagListResp.ErrorCode)
+			// Handle incoming packet
+			switch p := pk.(type) {
+			case *packet.TanNewGuestResponse:
+				l.roomPlayerCount.Add(1)
+				writePacket(enc, &packet.TanNotifyServerReady{
+					ServerAddress:         "127.0.0.1|19132",
+					ServerRaknetGuid:      "",
+					RTCRoomID:             fmt.Sprintf("%d", roomID),
+					NetherNetID:           fmt.Sprintf("%d", l.serverNetherID),
+					WebRTCCompressEnabled: true,
+				})
+			case *packet.TanLeaveRoomResponse:
+				l.roomPlayerCount.Add(-1)
+			case *packet.TanSetTagListResponse:
+				shouldRepeat = false
+				if p.ErrorCode == packet.TanSetTagListExceedLimit {
+					_ = conn.Close()
+					return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only set up to 2 tags")
+				}
+				if p.ErrorCode != packet.TanSetTagListSuccess {
+					_ = conn.Close()
+					return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to set room tags (code = %d)", p.ErrorCode)
+				}
+			default:
+			}
+
+			// If need continue
+			if !shouldRepeat {
+				break
+			}
 		}
 	}
 

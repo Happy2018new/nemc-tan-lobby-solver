@@ -14,8 +14,8 @@ const (
 	IDTanChangeRoomPrivacyRequest // TODO
 	IDTanExtendWhiteListRequest   // TODO
 	IDTanShrinkWhiteListRequest   // TODO
-	IDTanSetTagListRequest        // TODO
-	IDChangeRoomInfoRequest       // TODO
+	IDTanSetTagListRequest
+	IDChangeRoomInfoRequest // TODO
 	_
 	_
 	_
@@ -40,7 +40,7 @@ const (
 	_
 	_
 	_
-	IDTanSetTagListResponse  // TODO
+	IDTanSetTagListResponse
 	IDChangeRoomInfoResponse // TODO
 	_
 	_

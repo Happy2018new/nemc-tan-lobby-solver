@@ -6,6 +6,7 @@ import "fmt"
 type Authenticator interface {
 	GetAccess(roomID string) (TanLobbyLoginResponse, error)
 	GetCreate() (TanLobbyCreateResponse, error)
+	GetDebug(loginResponse string, raknetRand []byte) (TanLobbyDebugResponse, error)
 }
 
 // AccessWrapper ..
@@ -35,4 +36,13 @@ func (aw *AccessWrapper) GetCreate() (TanLobbyCreateResponse, error) {
 		return TanLobbyCreateResponse{}, fmt.Errorf("GetCreate: %v", err)
 	}
 	return tanLobbyCreateResp, nil
+}
+
+// GetCreate ..
+func (aw *AccessWrapper) GetDebug(loginResponse string, raknetRand []byte) (TanLobbyDebugResponse, error) {
+	tanLobbyDebugResp, err := aw.client.TanLobbyDebug(loginResponse, raknetRand)
+	if err != nil {
+		return TanLobbyDebugResponse{}, fmt.Errorf("GetDebug: %v", err)
+	}
+	return tanLobbyDebugResp, nil
 }

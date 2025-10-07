@@ -133,3 +133,47 @@ func (client *Client) TanLobbyCreate() (TanLobbyCreateResponse, error) {
 	// Return
 	return tanLobbyCreateResp, nil
 }
+
+// TanLobbyDebugRequest ..
+type TanLobbyDebugRequest struct {
+	FBToken       string `json:"login_token"`
+	LoginResponse string `json:"login_response"`
+	RaknetRand    []byte `json:"raknet_rand"`
+}
+
+// TanLobbyDebugResponse ..
+type TanLobbyDebugResponse struct {
+	Success         bool   `json:"success"`
+	ErrorInfo       string `json:"error_info"`
+	EncryptKeyBytes []byte `json:"encrypt_key_bytes"`
+	DecryptKeyBytes []byte `json:"decrypt_key_bytes"`
+}
+
+func (client *Client) TanLobbyDebug(loginResponse string, raknetRand []byte) (TanLobbyDebugResponse, error) {
+	// Pack request
+	request := TanLobbyDebugRequest{
+		FBToken:       client.FBToken,
+		LoginResponse: loginResponse,
+		RaknetRand:    raknetRand,
+	}
+	requestJsonBytes, _ := json.Marshal(request)
+
+	// Post request
+	resp, err := http.Post(
+		fmt.Sprintf("%s/api/phoenix/tan_lobby_debug", client.AuthServer),
+		"application/json",
+		bytes.NewBuffer(requestJsonBytes),
+	)
+	if err != nil {
+		return TanLobbyDebugResponse{}, fmt.Errorf("TanLobbyDebug: %v", err)
+	}
+
+	// Parse response
+	tanLobbyDebugResp, err := parseHttpResponse[TanLobbyDebugResponse](resp)
+	if err != nil {
+		return TanLobbyDebugResponse{}, fmt.Errorf("TanLobbyDebug: %v", err)
+	}
+
+	// Return
+	return tanLobbyDebugResp, nil
+}

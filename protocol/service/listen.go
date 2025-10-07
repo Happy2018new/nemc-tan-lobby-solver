@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/Happy2018new/nemc-tan-lobby-solver/bunker"
@@ -22,6 +23,7 @@ type ListenConfig struct {
 	RoomConfig
 	serverNetherID    uint64
 	raknetConnection  net.Conn
+	roomPlayerCount   atomic.Int32
 	netherNetListener *nethernet.Listener
 }
 
@@ -201,16 +203,19 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 				l.CloseRoom()
 				return
 			}
-			if _, ok := pk.(*packet.TanNewGuestResponse); !ok {
-				continue
+			switch pk.(type) {
+			case *packet.TanNewGuestResponse:
+				l.roomPlayerCount.Add(1)
+				writePacket(enc, &packet.TanNotifyServerReady{
+					ServerAddress:         "127.0.0.1|19132",
+					ServerRaknetGuid:      "",
+					RTCRoomID:             fmt.Sprintf("%d", roomID),
+					NetherNetID:           fmt.Sprintf("%d", l.serverNetherID),
+					WebRTCCompressEnabled: true,
+				})
+			case *packet.TanLeaveRoomResponse:
+				l.roomPlayerCount.Add(-1)
 			}
-			writePacket(enc, &packet.TanNotifyServerReady{
-				ServerAddress:         "127.0.0.1|19132",
-				ServerRaknetGuid:      "",
-				RTCRoomID:             fmt.Sprintf("%d", roomID),
-				NetherNetID:           fmt.Sprintf("%d", l.serverNetherID),
-				WebRTCCompressEnabled: true,
-			})
 		}
 	}()
 
@@ -253,6 +258,11 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 
 	// Return
 	return l.netherNetListener, roomID, nil
+}
+
+// PlayerCount ..
+func (l *ListenConfig) PlayerCount() int32 {
+	return l.roomPlayerCount.Load()
 }
 
 // CloseRoom ..

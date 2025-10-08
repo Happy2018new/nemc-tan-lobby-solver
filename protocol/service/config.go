@@ -45,3 +45,27 @@ func DefaultRoomConfig(roomName string, roomPasscode string, maxPlayerCount uint
 		AllowPvP:         true,
 	}
 }
+
+// SetTagList ..
+func (r RoomConfig) SetTagList(tagList []uint8) RoomConfig {
+	r.RoomTagList = tagList
+	return r
+}
+
+// SetRefreshTime ..
+func (r RoomConfig) SetRefreshTime(duration time.Duration) RoomConfig {
+	r.RoomRefreshTime = duration
+	return r
+}
+
+// SetUsedModItemIDs ..
+func (r RoomConfig) SetUsedModItemIDs(itemID []uint64) RoomConfig {
+	r.UsedModItemIDs = itemID
+	return r
+}
+
+// SetAllowPvP ..
+func (r RoomConfig) SetAllowPvP(enable bool) RoomConfig {
+	r.AllowPvP = enable
+	return r
+}

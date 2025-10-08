@@ -173,56 +173,77 @@ func (l *ListenConfig) createTanLobbyRoom(
 
 	// Set room tag if needed
 	if len(l.RoomConfig.RoomTagList) > 0 {
-		if err = writePacket(enc, &packet.TanSetTagListRequest{TagList: l.RoomConfig.RoomTagList}); err != nil {
+		err = writePacket(enc, &packet.TanSetTagListRequest{
+			TagList: l.RoomConfig.RoomTagList,
+		})
+		if err != nil {
 			_ = conn.Close()
 			return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
 		}
+	}
+
+	// Return
+	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
+}
+
+// startTanLobbyRoom ..
+func (l *ListenConfig) startTanLobbyRoom(ctx context.Context, enc *packet.Encoder, dec *packet.Decoder) (err error) {
+	// Set channel to recieve set tag list response and error
+	pkChannel := make(chan packet.TanSetTagListResponse)
+	errChannel := make(chan error, 1)
+
+	// Handle incoming raknet packet
+	go func() {
 		for {
-			// Prepare
-			shouldRepeat := true
-
-			// Read set tag list response
-			pk, err = readPacketWithContext(ctx, conn, dec)
+			// Read packet
+			pk, err := readPacket(dec)
 			if err != nil {
-				_ = conn.Close()
-				return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: %v", err)
+				// Always send error to the channel
+				errChannel <- err
+				close(errChannel)
+				// Then close the room and return
+				l.CloseRoom()
+				return
 			}
-
-			// Handle incoming packet
+			// Handle packet
 			switch p := pk.(type) {
 			case *packet.TanNewGuestResponse:
 				l.roomPlayerCount.Add(1)
 				writePacket(enc, &packet.TanNotifyServerReady{
 					ServerAddress:         "127.0.0.1|19132",
 					ServerRaknetGuid:      "",
-					RTCRoomID:             fmt.Sprintf("%d", roomID),
+					RTCRoomID:             "",
 					NetherNetID:           fmt.Sprintf("%d", l.serverNetherID),
 					WebRTCCompressEnabled: true,
 				})
 			case *packet.TanLeaveRoomResponse:
 				l.roomPlayerCount.Add(-1)
 			case *packet.TanSetTagListResponse:
-				shouldRepeat = false
-				if p.ErrorCode == packet.TanSetTagListExceedLimit {
-					_ = conn.Close()
-					return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Can only set up to 2 tags")
-				}
-				if p.ErrorCode != packet.TanSetTagListSuccess {
-					_ = conn.Close()
-					return nil, nil, nil, 0, fmt.Errorf("createTanLobbyRoom: Failed to set room tags (code = %d)", p.ErrorCode)
-				}
-			default:
+				pkChannel <- *p
+				close(pkChannel)
 			}
+		}
+	}()
 
-			// If need continue
-			if !shouldRepeat {
-				break
+	// Handle set tag list response
+	if len(l.RoomConfig.RoomTagList) > 0 {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("startTanLobbyRoom: %v", ctx.Err())
+		case err = <-errChannel:
+			return fmt.Errorf("startTanLobbyRoom: %v", err)
+		case p := <-pkChannel:
+			if p.ErrorCode == packet.TanSetTagListExceedLimit {
+				return fmt.Errorf("startTanLobbyRoom: Can only set up to 2 tags")
+			}
+			if p.ErrorCode != packet.TanSetTagListSuccess {
+				return fmt.Errorf("startTanLobbyRoom: Failed to set room tags (code = %d)", p.ErrorCode)
 			}
 		}
 	}
 
 	// Return
-	return conn, enc, dec, tanCreateRoomResp.RoomID, nil
+	return nil
 }
 
 // ListenContext ..
@@ -246,28 +267,6 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 	if err != nil {
 		return nil, 0, fmt.Errorf("ListenContext: %v", err)
 	}
-	go func() {
-		for {
-			pk, err := readPacket(dec)
-			if err != nil {
-				l.CloseRoom()
-				return
-			}
-			switch pk.(type) {
-			case *packet.TanNewGuestResponse:
-				l.roomPlayerCount.Add(1)
-				writePacket(enc, &packet.TanNotifyServerReady{
-					ServerAddress:         "127.0.0.1|19132",
-					ServerRaknetGuid:      "",
-					RTCRoomID:             fmt.Sprintf("%d", roomID),
-					NetherNetID:           fmt.Sprintf("%d", l.serverNetherID),
-					WebRTCCompressEnabled: true,
-				})
-			case *packet.TanLeaveRoomResponse:
-				l.roomPlayerCount.Add(-1)
-			}
-		}
-	}()
 
 	// Connect to websocket signaling server
 	wsConnection, err := signaling.Dialer{
@@ -300,6 +299,14 @@ func (l *ListenConfig) ListenContext(ctx context.Context) (listener *nethernet.L
 
 	// Create listener
 	l.netherNetListener, err = listenConfig.Listen(wsConnection)
+	if err != nil {
+		_ = l.raknetConnection.Close()
+		wsConnection.Close(fmt.Errorf("ListenContext: %v", err))
+		return nil, 0, fmt.Errorf("ListenContext: %v", err)
+	}
+
+	// Start tan lobby room
+	err = l.startTanLobbyRoom(ctx, enc, dec)
 	if err != nil {
 		_ = l.raknetConnection.Close()
 		wsConnection.Close(fmt.Errorf("ListenContext: %v", err))

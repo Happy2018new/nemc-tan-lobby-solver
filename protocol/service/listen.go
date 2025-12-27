@@ -130,7 +130,7 @@ func (l *ListenConfig) createTanLobbyRoom(
 			GameType:           0,
 			ConstantTestString: "test",
 			Vioce:              0,
-			ProtocolID:         38,
+			ProtocolID:         39,
 		},
 		ItemIDs:      l.RoomConfig.UsedModItemIDs,
 		MinLevel:     0,

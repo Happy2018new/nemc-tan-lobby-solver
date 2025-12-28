@@ -150,21 +150,24 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp bunker
 	}
 
 	// Read and handle incoming packet
-	pk, err = readPacketWithContext(ctx, conn, dec)
-	if err != nil {
-		return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
-	}
-	switch p := pk.(type) {
-	case *packet.TanNotifyServerReady:
-		remoteNetherNetID, err = strconv.ParseUint(p.NetherNetID, 10, 64)
+	for {
+		pk, err = readPacketWithContext(ctx, conn, dec)
 		if err != nil {
 			return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
 		}
-		return remoteNetherNetID, nil
-	case *packet.TanKickOutResponse:
-		return 0, fmt.Errorf("enterTanLobbyRoom: The host owner kick you from the room")
-	default:
-		return 0, fmt.Errorf("enterTanLobbyRoom: Unknown packet received; pk = %#v", pk)
+		switch p := pk.(type) {
+		case *packet.TanNotifyServerReady:
+			remoteNetherNetID, err = strconv.ParseUint(p.NetherNetID, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("enterTanLobbyRoom: %v", err)
+			}
+			return remoteNetherNetID, nil
+		case *packet.TanKickOutResponse:
+			return 0, fmt.Errorf("enterTanLobbyRoom: The host owner kick you from the room")
+		case *packet.TanNewGuestResponse:
+		default:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Unknown packet received; pk = %#v", pk)
+		}
 	}
 }
 

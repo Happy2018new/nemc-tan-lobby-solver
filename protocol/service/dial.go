@@ -164,7 +164,7 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp bunker
 			return remoteNetherNetID, nil
 		case *packet.TanKickOutResponse:
 			return 0, fmt.Errorf("enterTanLobbyRoom: The host owner kick you from the room")
-		case *packet.TanNewGuestResponse:
+		case *packet.TanNewGuestResponse, *packet.TanSetTagListResponse:
 		default:
 			return 0, fmt.Errorf("enterTanLobbyRoom: Unknown packet received; pk = %#v", pk)
 		}

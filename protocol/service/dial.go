@@ -138,10 +138,12 @@ func (d *Dialer) enterTanLobbyRoom(ctx context.Context, tanLobbyLoginResp bunker
 		switch tanEnterRoomResp.ErrorCode {
 		case packet.TanEnterRoomNotFound:
 			return 0, fmt.Errorf("enterTanLobbyRoom: Target room (%d) is closed", roomID)
-		case packet.TanEnterRoomWrongPasscode:
-			return 0, fmt.Errorf("enterTanLobbyRoom: Provided room passcode is incorrect")
+		case packet.TanEnterRoomAccessDenied:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Access denied (Possibly is that you are not the friend of the owner)")
 		case packet.TanEnterRoomFullOfPeople:
 			return 0, fmt.Errorf("enterTanLobbyRoom: Target room (%d) is full of people", roomID)
+		case packet.TanEnterRoomWrongPasscode:
+			return 0, fmt.Errorf("enterTanLobbyRoom: Provided room passcode is incorrect")
 		default:
 			return 0, fmt.Errorf("enterTanLobbyRoom: Enter room failed due to unknown reason (code = %d)", tanEnterRoomResp.ErrorCode)
 		}
